@@ -76,9 +76,6 @@ Where:
 ## Visualisation
 Install Python dependencies (example using `pip`):
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install --upgrade pip
 pip install pandas matplotlib
 ```
 Run the plotter (auto-picks latest CSV):
@@ -97,20 +94,10 @@ Three panels are produced:
 ## Performance Notes
 - Use `--release` for meaningful speed (LTO and optimizations configured in `Cargo.toml`).
 - Stats sampling cost grows mainly with building block matrices; reducing `SAMPLE_DELTA` increases overhead.
-- Triangle counting uses matrix multiplications; if scaling to very large N, consider incremental updates or sparse representations.
 
 ## Reproducibility
 - All simulation parameters are printed to stdout and embedded in the CSV comment line.
 - RNG is deterministic given `--SEED`.
-
-## Extending
-Potential extensions:
-- Add conditional triangle fractions (per-type share of existing triangles).
-- Buffer reuse for matrices to reduce per-sample allocations.
-- Additional subgraph motifs (squares, wedges) or clustering coefficients.
-
-## License
-Specify a license (e.g., MIT) if you plan to publish publicly.
 
 ---
 Feel free to open an issue or PR once this is hosted on GitHub for improvements or feature requests.
