@@ -1,0 +1,23 @@
+[package]
+name = "netcoevolve"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+indicatif = ">=0.17"
+rand = ">=0.9"
+rand_xoshiro = ">=0.7"
+rand_distr = ">=0.5"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+faer = { version = ">=0.22" }
+
+# High-performance build settings
+[profile.release]
+opt-level = 3          # Max optimisation
+lto = "thin"            # Whole-program LTO
+codegen-units = 1      # Better optimisation at cost of compile time
+panic = "abort"        # Smaller / faster panic paths
+incremental = false    # Disable incremental for deterministic, faster runtime
+debug = true           
+# strip = "symbols"      # Remove symbols in release binary
