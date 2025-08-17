@@ -174,9 +174,28 @@ impl ColNetwork {
         let old = self.colour[uidx];
         let new = 1 - old;
         let mut partners: Vec<u32> = Vec::with_capacity(n - 1);
-        for w in 0..self.n {
-            if w == u { continue; }
-            let (a, b) = if u < w { (u, w) } else { (w, u) };
+        // Loop 1: w in [0, u) canonical (w, u)
+        for w in 0..u {
+            let a = w;
+            let b = u; // a < b
+            let k = tri_index(a, b);
+            let i = self.pos[k] as usize;
+            let present = self.adj[a as usize * n + b as usize] != 0;
+            let same = self.colour[a as usize] == self.colour[b as usize];
+            let b_from = which_bucket(present, same);
+            let bucket_vec = &mut self.buckets[bidx(b_from)];
+            let (ru, rv) = bucket_vec.pop_at(i);
+            debug_assert_eq!((ru, rv), (a, b));
+            if i < bucket_vec.len() {
+                let (su, sv) = bucket_vec.a[i];
+                self.pos[tri_index(su, sv)] = i as u32;
+            }
+            partners.push(w);
+        }
+        // Loop 2: w in (u, N) canonical (u, w)
+        for w in (u + 1)..self.n {
+            let a = u;
+            let b = w; // a < b
             let k = tri_index(a, b);
             let i = self.pos[k] as usize;
             let present = self.adj[a as usize * n + b as usize] != 0;

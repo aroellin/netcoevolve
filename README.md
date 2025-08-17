@@ -31,36 +31,36 @@ Basic run (defaults):
 Example with custom parameters:
 ```bash
 ./target/release/netcoevolve \
-  --N 1000 \
-  --RHO 1.0 \
-  --ETA 1.0 \
-  --SD0 0.7 --SD1 2.0 \
-  --SC0 1.5 --SC1 0.3 \
-  --SAMPLE_DELTA 0.01 \
-  --T_MAX 5.0 \
-  --SEED 42
+  --n 1000 \
+  --rho 1.0 \
+  --eta 1.0 \
+  --sd0 0.7 --sd1 2.0 \
+  --sc0 1.5 --sc1 0.3 \
+  --sample_delta 0.01 \
+  --t_max 5.0 \
+  --seed 42
 ```
 If `--OUTPUT_FILE` is omitted a timestamped file like `output/simulation-YYYYMMDD-HHMMSS.csv` is created (directory auto-created).
 
 ### CLI Parameters
 | Flag | Meaning | Default |
 |------|---------|---------|
-| `--N` | Number of vertices | 1000 |
-| `--RHO` | Global edge event rate multiplier | 1.0 |
-| `--ETA` | Colour-flip driver (discordant-present) | 1.0 |
-| `--SD0` | Rate multiplier: discordant absent -> present | 0.7 |
-| `--SD1` | Rate multiplier: discordant present -> absent | 2.0 |
-| `--SC0` | Rate multiplier: concordant absent -> present | 1.5 |
-| `--SC1` | Rate multiplier: concordant present -> absent | 0.3 |
-| `--SAMPLE_DELTA` | Time between statistic samples | 0.01 |
-| `--T_MAX` | Maximum simulation time | 1.0 |
-| `--SEED` | RNG seed | 42 |
-| `--OUTPUT_FILE` | CSV path (optional) | auto timestamp |
+| `--n` | Number of vertices | 1000 |
+| `--rho` | Global edge event rate multiplier | 1.0 |
+| `--eta` | Colour-flip driver (discordant-present) | 1.0 |
+| `--sd0` | Rate multiplier: discordant absent -> present | 0.7 |
+| `--sd1` | Rate multiplier: discordant present -> absent | 2.0 |
+| `--sc0` | Rate multiplier: concordant absent -> present | 1.5 |
+| `--sc1` | Rate multiplier: concordant present -> absent | 0.3 |
+| `--sample_delta` | Time between statistic samples | 0.01 |
+| `--t_max` | Maximum simulation time | 1.0 |
+| `--seed` | RNG seed | 42 |
+| `--output_file` | CSV path (optional) | auto timestamp |
 
 ### CSV Output Schema
 First line (comment) lists parameters, e.g.:
 ```
-# N=1000 RHO=1 ETA=1 SD0=0.7 SD1=2 SC0=1.5 SC1=0.3 SAMPLE_DELTA=0.01 T_MAX=5 SEED=42 OUTPUT_FILE=output/simulation-20250816-120000.csv
+# n=1000 rho=1 eta=1 sd0=0.7 sd1=2 sc0=1.5 sc1=0.3 sample_delta=0.01 t_max=5 seed=42 output_file=output/simulation-20250816-120000.csv
 ```
 Header line:
 ```

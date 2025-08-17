@@ -87,7 +87,10 @@ def add_triangle_normalised(df: pd.DataFrame, n: int) -> dict[str,pd.Series]:
 def main():
     ap = argparse.ArgumentParser(description="Plot simulation CSV")
     ap.add_argument('csv', nargs='?', type=Path, help='CSV file (optional)')
-    ap.add_argument('--out', type=Path, help='Output PNG path')
+    ap.add_argument('--out', type=Path, help='Output filename (PNG by default)')
+    ap.add_argument('--split-panels', action='store_true', help='Also write each panel as an individual image (suffix -1,-2,...) when --out is used')
+    ap.add_argument('--dpi', type=int, default=150, help='DPI for saved figures (default 150)')
+    ap.add_argument('--ratio', type=str, help='Aspect ratio W:H for each panel (e.g. 4:3, 16:10)')
     ap.add_argument('--show', action='store_true', help='Show interactive window')
     ap.add_argument('--no-partitions', action='store_true', help='Hide e00/e01/e11 lines')
     # Triangles panel now always shown (raw counts)
@@ -107,7 +110,8 @@ def main():
             print(f'File not found: {path}', file=sys.stderr); sys.exit(1)
     params = parse_param_line(path)
     try:
-        n = int(params.get('N','0'))
+        # Support both legacy uppercase 'N' and new lowercase 'n'
+        n = int(params.get('n', params.get('N', '0')))
     except ValueError:
         n = 0
     df = pd.read_csv(path, comment='#')
@@ -124,7 +128,24 @@ def main():
 
     # --- Multi-panel layout ---
     n_rows = 3
-    fig, axes = plt.subplots(n_rows, 1, figsize=(9, 3.2*n_rows), sharex=True)
+    # Aspect ratio handling: width:height per panel
+    panel_width = 9.0
+    if args.ratio:
+        try:
+            w_str, h_str = args.ratio.split(':', 1)
+            w_ratio = float(w_str)
+            h_ratio = float(h_str)
+            if w_ratio <= 0 or h_ratio <= 0:
+                raise ValueError
+            panel_height = panel_width * (h_ratio / w_ratio)
+        except ValueError:
+            print(f"Invalid --ratio '{args.ratio}'. Expected W:H with positive numbers, e.g. 4:3", file=sys.stderr)
+            return
+    else:
+        # Previous default total height ~ 3.2 * n_rows, so per-panel ~3.2
+        panel_height = 3.2
+    total_height = panel_height * n_rows
+    fig, axes = plt.subplots(n_rows, 1, figsize=(panel_width, total_height), sharex=True)
     # Normalise axes -> list of Axes
     if isinstance(axes, np.ndarray):
         axes = axes.ravel().tolist()
@@ -207,8 +228,45 @@ def main():
     fig.tight_layout()
     if args.out:
         out_path = args.out if args.out.suffix else args.out.with_suffix('.png')
-        fig.savefig(out_path, dpi=150)
+        fig.savefig(out_path, dpi=args.dpi)
         print(f'Wrote {out_path}')
+        if args.split_panels:
+            stem = out_path.stem
+            ext = out_path.suffix
+            parent = out_path.parent
+            # Map panel index to axis
+            panel_files = []
+            for idx, ax in enumerate(axes, start=1):
+                # Derive individual panel size; keep width 6 for panel export
+                ind_width = 6.0
+                if args.ratio:
+                    ind_height = ind_width * (h_ratio / w_ratio)
+                else:
+                    ind_height = 4.0
+                sub_fig = plt.figure(figsize=(ind_width, ind_height))
+                # Copy artists by re-plotting data
+                for line in ax.get_lines():
+                    sub_fig_ax = plt.gca()
+                    sub_fig_ax.plot(line.get_xdata(), line.get_ydata(),
+                                    label=line.get_label(),
+                                    color=line.get_color(),
+                                    linewidth=line.get_linewidth())
+                sub_fig_ax = plt.gca()
+                # Titles / labels from original
+                sub_fig_ax.set_title(ax.get_title())
+                sub_fig_ax.set_xlabel(ax.get_xlabel())
+                sub_fig_ax.set_ylabel(ax.get_ylabel())
+                sub_fig_ax.grid(alpha=0.3)
+                if ax.get_legend() is not None:
+                    sub_fig_ax.legend(loc='upper right', fontsize='small')
+                panel_path = parent / f"{stem}-{idx}{ext}"
+                sub_fig.tight_layout()
+                sub_fig.savefig(panel_path, dpi=args.dpi)
+                plt.close(sub_fig)
+                panel_files.append(panel_path)
+            print("Wrote panel images:")
+            for p in panel_files:
+                print(f"  {p}")
     if args.show or not args.out:
         plt.show()
 

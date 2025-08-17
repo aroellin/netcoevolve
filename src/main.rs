@@ -35,48 +35,48 @@ at the sampling rate and shows time, edge density, and the fraction of vertices 
 Subgraph statistics are not implemented yet (dummy placeholder).
 "#)]
 struct Cli {
-    /// Number of vertices (N)
-    #[arg(long = "N", default_value_t = 1000u32)]
+    /// Number of vertices (n)
+    #[arg(long = "n", default_value_t = 1000u32)]
     n: u32,
 
-    /// RHO (rate multiplier, default 1.0)
-    #[arg(long = "RHO", default_value_t = 1.0)]
+    /// rho (rate multiplier, default 1.0)
+    #[arg(long = "rho", default_value_t = 1.0)]
     rho: f64,
 
-    /// ETA (base for discordant-present driven colour flips)
-    #[arg(long = "ETA", default_value_t = 1.0)]
+    /// eta (base for discordant-present driven colour flips)
+    #[arg(long = "eta", default_value_t = 1.0)]
     eta: f64,
 
-    /// SAMPLE_DELTA (time between samples)
-    #[arg(long = "SAMPLE_DELTA", default_value_t = 0.01)]
+    /// sample_delta (time between samples)
+    #[arg(long = "sample_delta", default_value_t = 0.01)]
     sample_delta: f64,
 
-    /// T_MAX (maximum simulation time)
-    #[arg(long = "T_MAX", default_value_t = 1.0)]
+    /// t_max (maximum simulation time)
+    #[arg(long = "t_max", default_value_t = 1.0)]
     t_max: f64,
 
-    /// SD0 (discordant ABSENT -> PRESENT multiplier)
-    #[arg(long = "SD0", default_value_t = 0.7)]
+    /// sd0 (discordant ABSENT -> PRESENT multiplier)
+    #[arg(long = "sd0", default_value_t = 0.7)]
     sd0: f64,
 
-    /// SD1 (discordant PRESENT -> ABSENT multiplier)
-    #[arg(long = "SD1", default_value_t = 2.0)]
+    /// sd1 (discordant PRESENT -> ABSENT multiplier)
+    #[arg(long = "sd1", default_value_t = 2.0)]
     sd1: f64,
 
-    /// SC0 (concordant ABSENT -> PRESENT multiplier)
-    #[arg(long = "SC0", default_value_t = 1.5)]
+    /// sc0 (concordant ABSENT -> PRESENT multiplier)
+    #[arg(long = "sc0", default_value_t = 1.5)]
     sc0: f64,
 
-    /// SC1 (concordant PRESENT -> ABSENT multiplier)
-    #[arg(long = "SC1", default_value_t = 0.3)]
+    /// sc1 (concordant PRESENT -> ABSENT multiplier)
+    #[arg(long = "sc1", default_value_t = 0.3)]
     sc1: f64,
 
     /// RNG seed
-    #[arg(long = "SEED", default_value_t = 42u64)]
+    #[arg(long = "seed", default_value_t = 42u64)]
     seed: u64,
     
-    /// OUTPUT_FILE (CSV path; default auto timestamp)
-    #[arg(long = "OUTPUT_FILE")]
+    /// output_file (CSV path; default auto timestamp)
+    #[arg(long = "output")]
     output_file: Option<String>,
 }
 // (stats module handles its own file I/O; no direct file imports needed here)
@@ -141,17 +141,17 @@ fn main() {
 
     // ---- Print all parameters up-front (for reproducibility) ----
     println!("Parameters:");
-    println!("  SEED           = {}", args.seed);
-    println!("  SAMPLE_DELTA   = {}", args.sample_delta);
-    println!("  T_MAX          = {}", args.t_max);
-    println!("  N              = {}", args.n);
-    println!("  RHO            = {}", args.rho);
-    println!("  ETA            = {}", args.eta);
-    println!("  SD0            = {}", args.sd0);
-    println!("  SD1            = {}", args.sd1);
-    println!("  SC0            = {}", args.sc0);
-    println!("  SC1            = {}", args.sc1);
-    println!("  OUTPUT_FILE    = {}", output_path);
+    println!("  seed           = {}", args.seed);
+    println!("  sample_delta   = {}", args.sample_delta);
+    println!("  t_max          = {}", args.t_max);
+    println!("  n              = {}", args.n);
+    println!("  rho            = {}", args.rho);
+    println!("  eta            = {}", args.eta);
+    println!("  sd0            = {}", args.sd0);
+    println!("  sd1            = {}", args.sd1);
+    println!("  sc0            = {}", args.sc0);
+    println!("  sc1            = {}", args.sc1);
+    println!("  output         = {}", output_path);
     println!();
 
     // Progress bar (ticks at sampling times)
