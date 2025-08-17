@@ -15,70 +15,9 @@ use rand::{Rng, SeedableRng};
 use rand_distr::{Distribution, Exp1};
 use rand_xoshiro::Xoshiro256PlusPlus;
 use std::time::Instant;
+mod colnetwork;
+use colnetwork::{ColNetwork, BucketKind, bidx};
 
-
-/// Upper-triangle index for (u,v) with u < v.
-#[inline]
-fn tri_index(u: u32, v: u32) -> usize {
-    debug_assert!(u < v);
-    (u as u64 + (v as u64) * ((v as u64) - 1) / 2) as usize
-}
-
-/// Bucket kind from (present?, same_colour?).
-#[repr(usize)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum BucketKind { C0 = 0, C1 = 1, D0 = 2, D1 = 3 }
-#[inline] fn bidx(b: BucketKind) -> usize { b as usize }
-
-#[inline]
-fn which_bucket(present: bool, same_colour: bool) -> BucketKind {
-    match (present, same_colour) {
-        (false, true)  => BucketKind::C0,
-        (true,  true)  => BucketKind::C1,
-        (false, false) => BucketKind::D0,
-        (true,  false) => BucketKind::D1,
-    }
-}
-
-/// Dense bucket of canonical edges with swap–pop deletion.
-#[derive(Default)]
-struct Bucket {
-    a: Vec<(u32, u32)>, // edges with u < v
-}
-impl Bucket {
-    #[inline] fn len(&self) -> usize { self.a.len() }
-    #[inline] fn is_empty(&self) -> bool { self.a.is_empty() }
-
-    /// Append canonical (u,v); return position where it was placed.
-    #[inline] fn push(&mut self, u: u32, v: u32) -> usize {
-        debug_assert!(u < v);
-        let idx = self.a.len();   // next free slot
-        self.a.push((u, v));      // placed at idx
-        idx
-    }
-
-    /// Remove element at index i via swap–pop; return removed edge.
-    #[inline] fn pop_at(&mut self, i: usize) -> (u32, u32) {
-        let last = self.a.len() - 1;
-        if i != last { self.a.swap(i, last); }
-        self.a.pop().unwrap()
-    }
-
-    /// Remove a random element; returns (u,v,i) where i was the index removed.
-    #[inline] fn remove_random<R: Rng>(&mut self, rng: &mut R) -> Option<(u32, u32, usize)> {
-        if self.a.is_empty() { return None; }
-    let i = rng.random_range(0..self.a.len());
-        let (u, v) = self.pop_at(i);
-        Some((u, v, i))
-    }
-
-    /// Pick a random edge without removing it.
-    #[inline] fn pick_random<R: Rng>(&self, rng: &mut R) -> Option<(u32,u32)> {
-        if self.a.is_empty() { return None; }
-        let i = rng.random_range(0..self.a.len());
-        Some(self.a[i])
-    }
-}
 
 /// CLI: ALL-CAPS parameters configurable.
 #[derive(Parser, Debug)]
@@ -144,10 +83,7 @@ struct Cli {
 mod stats;
 use stats::{init_stats_writer, compute_stats, flush_stats};
 
-#[inline] fn is_present(adj: &[u8], n: usize, u: usize, v: usize) -> bool {
-    debug_assert!(u != v);
-    adj[u * n + v] != 0
-}
+// (colnetwork module encapsulates bucket + adjacency logic)
 #[inline] fn set_edge(adj: &mut [u8], n: usize, u: usize, v: usize, present: bool) {
     let val = if present { 1u8 } else { 0u8 };
     adj[u * n + v] = val;
@@ -156,51 +92,7 @@ use stats::{init_stats_writer, compute_stats, flush_stats};
 
 /// Remove (u,v) from its bucket using `pos[]`, fix `pos[]` if swap occurred,
 /// and return which bucket it was in. Requires canonical (u<v) inside.
-fn remove_specific(
-    u: u32,
-    v: u32,
-    n: usize,
-    adj: &[u8],
-    colour: &[u8],
-    pos: &mut [u32],
-    buckets: &mut [Bucket; 4],
-) -> BucketKind {
-    debug_assert!(u < v, "remove_specific requires u < v");
-    let k = tri_index(u, v);
-    let i = pos[k] as usize;
-
-    let ui = u as usize;
-    let vi = v as usize;
-    let present = is_present(adj, n, ui, vi);
-    let same = colour[ui] == colour[vi];
-    let b = which_bucket(present, same);
-
-    let bkt = &mut buckets[bidx(b)];
-    let (ru, rv) = bkt.pop_at(i);
-    debug_assert_eq!((ru, rv), (u, v));
-
-    // If we swapped in a different edge at index i, update its pos[] entry.
-    if i < bkt.len() {
-        let (su, sv) = bkt.a[i];
-        let kk = tri_index(su, sv);
-        pos[kk] = i as u32;
-    }
-    b
-}
-
-/// Append (u,v) to bucket b and record its position in `pos[]`. Requires canonical (u<v) inside.
-fn add_to_bucket(
-    u: u32,
-    v: u32,
-    b: BucketKind,
-    pos: &mut [u32],
-    buckets: &mut [Bucket; 4],
-) {
-    debug_assert!(u < v, "add_to_bucket requires u < v");
-    let idx = buckets[bidx(b)].push(u, v);
-    let k = tri_index(u, v);
-    pos[k] = idx as u32;
-}
+// (legacy per-edge removal/add helpers replaced by ColNetwork methods)
 
 /// Progress-bar message helper: sets "t=..., dens=..., frac1=..."
 #[inline]
@@ -227,22 +119,7 @@ fn initialise_colours_and_adjacency<R: Rng>(colour: &mut [u8], adj: &mut [u8], n
 }
 
 /// Build buckets + pos[] from colour and adjacency; returns present edge count.
-fn build_buckets_and_positions(colour: &[u8], adj: &[u8], n_u32: u32, pos: &mut [u32], buckets: &mut [Bucket; 4]) -> usize {
-    let n = n_u32 as usize;
-    let mut present_edges = 0usize;
-    for u in 0..n_u32 {
-        for v in (u + 1)..n_u32 {
-            let ui = u as usize; let vi = v as usize;
-            let present = is_present(adj, n, ui, vi);
-            let same = colour[ui] == colour[vi];
-            if present { present_edges += 1; }
-            let b = which_bucket(present, same);
-            let idx = buckets[bidx(b)].push(u, v);
-            let k = tri_index(u, v); pos[k] = idx as u32;
-        }
-    }
-    present_edges
-}
+// build_buckets_and_positions now handled inside ColNetwork::new
 
 fn main() {
     let args = Cli::parse();
@@ -256,8 +133,10 @@ fn main() {
     let sample_delta = args.sample_delta;
 
     // Decide output file path (generate timestamped if not provided)
+    // Ensure output directory exists and generate default path inside it
     let output_path: String = args.output_file.clone().unwrap_or_else(|| {
-        format!("simulation-{}.csv", chrono::Local::now().format("%Y%m%d-%H%M%S"))
+        let _ = std::fs::create_dir_all("output");
+        format!("output/simulation-{}.csv", chrono::Local::now().format("%Y%m%d-%H%M%S"))
     });
 
     // ---- Print all parameters up-front (for reproducibility) ----
@@ -289,21 +168,11 @@ fn main() {
     // RNG (non-crypto)
     let mut rng = Xoshiro256PlusPlus::seed_from_u64(args.seed);
 
-    // Storage
-    let mut adj: Vec<u8> = vec![0; n * n]; // symmetric 0/1
-    let mut colour: Vec<u8> = vec![0; n];  // 0/1
-    // Position table: one entry per unordered pair (u<v): N*(N-1)/2
-    let mut pos: Vec<u32> = vec![0; (args.n as usize * (args.n as usize - 1)) / 2];
-    let mut buckets: [Bucket; 4] = [
-        Bucket::default(), Bucket::default(), Bucket::default(), Bucket::default()
-    ];
-
-    // Initialise colours + adjacency via helper
+    // Initialise colours + adjacency via helper, then wrap in ColNetwork
+    let mut adj: Vec<u8> = vec![0; n * n];
+    let mut colour: Vec<u8> = vec![0; n];
     initialise_colours_and_adjacency(&mut colour, &mut adj, n, &mut rng);
-    // Track fraction of 1s efficiently
-    let mut ones_count: usize = colour.iter().map(|&c| c as usize).sum();
-    // Build buckets + pos[] and obtain present edge count
-    let mut present_edges: usize = build_buckets_and_positions(&colour, &adj, args.n, &mut pos, &mut buckets);
+    let mut net = ColNetwork::new(adj, colour);
 
     // Precompute normaliser for density: N*(N-1)
     let denom_pairs = (args.n as f64) * ((args.n as f64) - 1.0);
@@ -317,24 +186,34 @@ fn main() {
 
     // Statistics writer init + header (compute_stats will append rows)
     init_stats_writer(Some(output_path.clone()), &args);
-    compute_stats(0.0, &adj, &colour, n);
+    compute_stats(0.0, net.adj(), net.colour(), n);
 
     while t < t_max {
         // Sampling tick? update progress + (later) stats
         let next_tick_t = (samples_done as f64) * sample_delta;
         if t >= next_tick_t {
             pb.set_position(samples_done.min(total_ticks));
-            update_bar(&pb, t, present_edges, ones_count, denom_pairs, n);
-            compute_stats(t, &adj, &colour, n);
+            update_bar(&pb, t, net.present_edges(), net.ones_count(), denom_pairs, n);
+            compute_stats(t, net.adj(), net.colour(), n);
             samples_done += 1;
         }
 
         // Event rates
-        let r0 = if !buckets[bidx(BucketKind::D1)].is_empty() { args.eta * 2.0 * (buckets[bidx(BucketKind::D1)].len() as f64) } else { 0.0 };
-        let r1 = if args.sc0 > 0.0 { rho * args.sc0 * (buckets[bidx(BucketKind::C0)].len() as f64) } else { 0.0 };
-        let r2 = if args.sc1 > 0.0 { rho * args.sc1 * (buckets[bidx(BucketKind::C1)].len() as f64) } else { 0.0 };
-        let r3 = if args.sd0 > 0.0 { rho * args.sd0 * (buckets[bidx(BucketKind::D0)].len() as f64) } else { 0.0 };
-        let r4 = if args.sd1 > 0.0 { rho * args.sd1 * (buckets[bidx(BucketKind::D1)].len() as f64) } else { 0.0 };
+        let r0 = if !net.bucket_is_empty(bidx(BucketKind::D1)) {
+            args.eta * 2.0 * (net.bucket_len(bidx(BucketKind::D1)) as f64)
+        } else { 0.0 };
+        let r1 = if args.sc0 > 0.0 {
+            rho * args.sc0 * (net.bucket_len(bidx(BucketKind::C0)) as f64)
+        } else { 0.0 };
+        let r2 = if args.sc1 > 0.0 {
+            rho * args.sc1 * (net.bucket_len(bidx(BucketKind::C1)) as f64)
+        } else { 0.0 };
+        let r3 = if args.sd0 > 0.0 {
+            rho * args.sd0 * (net.bucket_len(bidx(BucketKind::D0)) as f64)
+        } else { 0.0 };
+        let r4 = if args.sd1 > 0.0 {
+            rho * args.sd1 * (net.bucket_len(bidx(BucketKind::D1)) as f64)
+        } else { 0.0 };
         let r_tot = r0 + r1 + r2 + r3 + r4;
         if r_tot <= 0.0 { break; }
 
@@ -352,72 +231,30 @@ fn main() {
     match ev {
             // (0) discordant-present edge triggers a colour flip at a random endpoint
             0 => {
-                // Sample a discordant-present edge without structural mutation
-                if let Some((u, v)) = buckets[bidx(BucketKind::D1)].pick_random(&mut rng) {
-                    // Flip one endpoint and move all incident edges (u0, w)
-                    let u0 = if rng.random::<bool>() { u } else { v };
-                    let u0i = u0 as usize;
-                    let old_col = colour[u0i];
-
-                    // Two loops to avoid branch on w==u0 and to hand over canonical (u<v) ordering directly.
-                    // Loop 1: w in [0, u0)  => canonical pair is (w, u0)
-                    for w in 0..u0 {
-                        let wi = w as usize;
-                        let _old = remove_specific(w, u0, n, &adj, &colour, &mut pos, &mut buckets);
-                        let present = is_present(&adj, n, wi, u0i); // adjacency symmetric
-                        let same_after = (1 - old_col) == colour[wi];
-                        let b_new = which_bucket(present, same_after);
-                        add_to_bucket(w, u0, b_new, &mut pos, &mut buckets);
-                    }
-                    // Loop 2: w in (u0, N)  => canonical pair is (u0, w)
-                    for w in (u0+1)..args.n {
-                        let wi = w as usize;
-                        let _old = remove_specific(u0, w, n, &adj, &colour, &mut pos, &mut buckets);
-                        let present = is_present(&adj, n, u0i, wi);
-                        let same_after = (1 - old_col) == colour[wi];
-                        let b_new = which_bucket(present, same_after);
-                        add_to_bucket(u0, w, b_new, &mut pos, &mut buckets);
-                    }
-                    colour[u0i] ^= 1;
-                    // Update ones_count quickly
-                    if old_col == 0 { ones_count += 1; } else { ones_count -= 1; }
+                if let Some((u,v)) = net.pick_random(bidx(BucketKind::D1), &mut rng) {
+                    let u0 = if rng.random::<bool>() { u } else { v }; // endpoint to flip
+                    net.flip_colour(u0);
                     sim_steps_v += 1;
                 }
             }
             // (1..=4) edge add/remove within concordant/discordant buckets
             1 | 2 | 3 | 4 => {
                 use BucketKind::*;
-                let (from_kind, to_kind, add_edge) = match ev {
-                    1 => (C0, C1, true),  // absent concordant -> present
-                    2 => (C1, C0, false), // present concordant -> absent
-                    3 => (D0, D1, true),  // absent discordant -> present
-                    4 => (D1, D0, false), // present discordant -> absent
+                let (from_idx, to_idx) = match ev {
+                    1 => (bidx(C0), bidx(C1)), // absent concordant -> present
+                    2 => (bidx(C1), bidx(C0)), // present concordant -> absent
+                    3 => (bidx(D0), bidx(D1)), // absent discordant -> present
+                    4 => (bidx(D1), bidx(D0)), // present discordant -> absent
                     _ => unreachable!(),
                 };
-                let sampled = {
-                    let bkt = &mut buckets[bidx(from_kind)];
-                    bkt.remove_random(&mut rng).map(|(u, v, i_removed)| {
-                        if let Some(&(su, sv)) = bkt.a.get(i_removed) {
-                            pos[tri_index(su, sv)] = i_removed as u32;
-                        }
-                        (u, v)
-                    })
-                };
-                if let Some((u, v)) = sampled {
-                    set_edge(&mut adj, n, u as usize, v as usize, add_edge);
-                    add_to_bucket(u, v, to_kind, &mut pos, &mut buckets);
-                    if add_edge { present_edges += 1; } else { present_edges -= 1; }
-                }
+                let _ = net.move_edge(from_idx, to_idx, &mut rng);
             }
             _ => unreachable!(),
         }
 
         // Optional invariant (enable in debug builds)
         debug_assert_eq!(
-            buckets[bidx(BucketKind::C0)].len()
-            + buckets[bidx(BucketKind::C1)].len()
-            + buckets[bidx(BucketKind::D0)].len()
-            + buckets[bidx(BucketKind::D1)].len(),
+            net.bucket_len(0) + net.bucket_len(1) + net.bucket_len(2) + net.bucket_len(3),
             (args.n as usize) * (args.n as usize - 1) / 2
         );
 
@@ -426,7 +263,7 @@ fn main() {
 
     // Final progress update
     pb.set_position(total_ticks);
-    update_bar(&pb, t, present_edges, ones_count, denom_pairs, n);
+    update_bar(&pb, t, net.present_edges(), net.ones_count(), denom_pairs, n);
     flush_stats();
     pb.finish_with_message(format!(
         "Done. t={:.6}, steps={}, flips={}, elapsed={:?}",

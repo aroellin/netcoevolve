@@ -7,7 +7,7 @@
 //!
 //! Internally maintains a thread-local CSV writer so calls stay lightweight.
 
-use std::fs::File;
+use std::fs::{File, create_dir_all};
 use std::io::{Write, BufWriter};
 use chrono::Local;
 use crate::Cli;
@@ -107,9 +107,12 @@ pub fn flush_stats() {
 struct CsvStatsWriter { w: BufWriter<File> }
 impl CsvStatsWriter {
     fn new(path_opt: Option<String>, args: &Cli) -> std::io::Result<Self> {
+        // Ensure output directory exists
+        let out_dir = std::path::Path::new("output");
+        if !out_dir.exists() { let _ = create_dir_all(out_dir); }
         let path = if let Some(p) = path_opt { p } else {
             let ts = Local::now().format("%Y%m%d-%H%M%S");
-            format!("simulation-{}.csv", ts)
+            format!("output/simulation-{}.csv", ts)
         };
         let f = File::create(&path)?;
         let mut w = BufWriter::new(f);

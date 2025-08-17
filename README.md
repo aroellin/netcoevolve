@@ -40,7 +40,7 @@ Example with custom parameters:
   --T_MAX 5.0 \
   --SEED 42
 ```
-If `--OUTPUT_FILE` is omitted a timestamped file like `simulation-YYYYMMDD-HHMMSS.csv` is created.
+If `--OUTPUT_FILE` is omitted a timestamped file like `output/simulation-YYYYMMDD-HHMMSS.csv` is created (directory auto-created).
 
 ### CLI Parameters
 | Flag | Meaning | Default |
@@ -60,7 +60,7 @@ If `--OUTPUT_FILE` is omitted a timestamped file like `simulation-YYYYMMDD-HHMMS
 ### CSV Output Schema
 First line (comment) lists parameters, e.g.:
 ```
-# N=1000 RHO=1 ETA=1 SD0=0.7 SD1=2 SC0=1.5 SC1=0.3 SAMPLE_DELTA=0.01 T_MAX=5 SEED=42 OUTPUT_FILE=simulation-20250816-120000.csv
+# N=1000 RHO=1 ETA=1 SD0=0.7 SD1=2 SC0=1.5 SC1=0.3 SAMPLE_DELTA=0.01 T_MAX=5 SEED=42 OUTPUT_FILE=output/simulation-20250816-120000.csv
 ```
 Header line:
 ```
@@ -78,13 +78,13 @@ Install Python dependencies (example using `pip`):
 ```bash
 pip install pandas matplotlib
 ```
-Run the plotter (auto-picks latest CSV):
+Run the plotter (auto-picks latest CSV in current working directory; `cd output` to pick newest there):
 ```bash
 python scripts/visualise.py --show
 ```
-Or specify a file and save a PNG:
+Or specify a file in `output/` and save a PNG:
 ```bash
-python scripts/visualise.py simulation-20250816-120000.csv --out run.png
+python scripts/visualise.py output/simulation-20250816-120000.csv --out run.png
 ```
 Three panels are produced:
 1. Colour fractions over time.

@@ -6,7 +6,7 @@ Expected CSV header (after parameter comment line):
 Triangle columns are (#type)/C(N,3); their sum is total triangle density (1 only for a complete graph).
 
 Features:
-  * Auto-pick newest simulation-*.csv if path omitted.
+    * Auto-pick newest simulation-*.csv if path omitted (searches CWD, then output/).
   * Reconstruct overall edge density exactly (using N from parameter line) and approx (ignoring 1/N terms).
   * Plot partition densities e00,e01,e11 (optional) and colour1 fraction.
   * Optionally plot triangle composition counts or normalised densities.
@@ -20,8 +20,20 @@ import matplotlib.pyplot as plt
 
 
 def latest_csv() -> Path | None:
-    files = sorted(Path.cwd().glob("simulation-*.csv"))
-    return files[-1] if files else None
+    """Find newest simulation CSV in current directory or output/ subdir.
+
+    Preference is simply newest lexicographically (timestamps in filename) across both.
+    """
+    cwd = Path.cwd()
+    candidates = list(cwd.glob("simulation-*.csv"))
+    out_dir = cwd / "output"
+    if out_dir.is_dir():
+        candidates.extend(out_dir.glob("simulation-*.csv"))
+    if not candidates:
+        return None
+    # Filenames are simulation-YYYYMMDD-HHMMSS.csv so lexicographic sort works.
+    candidates.sort(key=lambda p: p.name)
+    return candidates[-1]
 
 
 def parse_param_line(path: Path) -> dict:
@@ -86,7 +98,13 @@ def main():
         print('No simulation-*.csv files found.', file=sys.stderr)
         sys.exit(1)
     if not path.exists():
-        print(f'File not found: {path}', file=sys.stderr); sys.exit(1)
+        # If bare filename provided and not found, try output/ subdir
+        if path.parent == Path('.'):
+            alt = Path('output') / path
+            if alt.exists():
+                path = alt
+        if not path.exists():
+            print(f'File not found: {path}', file=sys.stderr); sys.exit(1)
     params = parse_param_line(path)
     try:
         n = int(params.get('N','0'))
@@ -119,9 +137,11 @@ def main():
 
     # Panel 1: colour fractions
     axc = axes[0]
-    axc.plot(tvals, df['frac0'], label='frac0', color='tab:blue')
-    axc.plot(tvals, df['frac1'], label='frac1', color='tab:orange')
-    axc.set_ylabel('colour fraction')
+    axc.plot(tvals, df['frac0'], label='Colour 0', color='tab:blue')
+    axc.plot(tvals, df['frac1'], label='Colour 1', color='tab:orange')
+    # Title
+    axc.set_title('Colour Densities')
+    axc.set_ylabel('Fraction of Vertices')
     axc.set_ylim(0,1)
     axc.grid(alpha=0.3)
     axc.legend(loc='upper right', fontsize='small')
@@ -147,10 +167,11 @@ def main():
 
     # Panel 2: edge densities aggregated
     axe = axes[1]
-    axe.plot(tvals, concord_frac, label='concordant edges', color='green')
-    axe.plot(tvals, discord_frac, label='discordant edges', color='red')
-    axe.plot(tvals, total_frac, label='total edges', color='black')
-    axe.set_ylabel('edge density')
+    axe.plot(tvals, total_frac, label='Total Edge Density', color='black', zorder=3)
+    axe.plot(tvals, concord_frac, label='Concordant Edge Density (0–0, 1–1)', color='green')
+    axe.plot(tvals, discord_frac, label='Discordant edge density (0–1)', color='red')
+    axe.set_title('Edge Densities')
+    axe.set_ylabel('Fraction of Edges')
     axe.set_ylim(0,1)
     axe.grid(alpha=0.3)
     axe.legend(loc='upper right', fontsize='small')
@@ -160,13 +181,14 @@ def main():
     axt = axes[2]
     tri_cols = {'3cyc000','3cyc001','3cyc011','3cyc111'}
     if tri_cols.issubset(df.columns):
-        axt.plot(tvals, df['3cyc000'], label='000/C(N,3)', color='#1b9e77')
-        axt.plot(tvals, df['3cyc001'], label='001/C(N,3)', color='#d95f02')
-        axt.plot(tvals, df['3cyc011'], label='011/C(N,3)', color='#7570b3')
-        axt.plot(tvals, df['3cyc111'], label='111/C(N,3)', color='#e7298a')
         tri_sum = df['3cyc000'] + df['3cyc001'] + df['3cyc011'] + df['3cyc111']
-        axt.plot(tvals, tri_sum, label='total triangle density', color='black', linewidth=1.2)
-        axt.set_ylabel('tri densities (per C(N,3))')
+        axt.plot(tvals, tri_sum, label='Total Triangle Density', color='black', zorder=3)
+        axt.plot(tvals, df['3cyc000'], label='Triangle Density 000', color='#1b9e77')
+        axt.plot(tvals, df['3cyc001'], label='Triangle Density 001', color='#d95f02')
+        axt.plot(tvals, df['3cyc011'], label='Triangle Density 011', color='#7570b3')
+        axt.plot(tvals, df['3cyc111'], label='Triangle Density 111', color='#e7298a')
+        axt.set_title('Triangle Densities')
+        axt.set_ylabel('Fraction of Triangles')
         try:
             ymax = float(tri_sum.max())
         except Exception:
@@ -179,7 +201,7 @@ def main():
     else:
         axt.text(0.5,0.5,'Triangle columns missing', ha='center', va='center')
     axt.grid(alpha=0.3)
-    axt.legend(loc='upper right', fontsize='small', ncol=3)
+    axt.legend(loc='upper right', fontsize='small', ncol=1)
 
     axes[-1].set_xlabel('time')
     fig.tight_layout()
