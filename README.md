@@ -7,7 +7,7 @@ Fast stochastic coevolving network simulation with two vertex colours and adapti
 - Compact adjacency (u8) + four dense edge buckets for O(1) random edge sampling (swap–pop) and fast rate recalculation.
 - Periodic sampling at fixed time delta (SAMPLE_DELTA) writing a CSV.
 - Colour-partitioned statistics:
-  - Colour fractions: `frac0`, `frac1`.
+  - Colour fractions: `col0`, `col1`.
   - Edge partition densities: `e00` (between two colour-0 vertices), `e01` (cross), `e11` (between two colour-1 vertices). Each is a simple proportion of possible such edges (undirected, no loops).
   - Triangle colour-type densities: `3cyc000`, `3cyc001`, `3cyc011`, `3cyc111`, each equal to (count of triangles of that colour multiset) / C(N,3). Their sum is the overall triangle density (equals 1 only for the complete graph).
 - Matrix-based statistics (via `faer`) for clear formulation of block adjacency and triangle counts.
@@ -64,10 +64,10 @@ First line (comment) lists parameters, e.g.:
 ```
 Header line:
 ```
-time,frac0,frac1,e00,e01,e11,3cyc000,3cyc001,3cyc011,3cyc111
+time,col0,col1,e00,e01,e11,3cyc000,3cyc001,3cyc011,3cyc111
 ```
 Where:
-- `frac0`, `frac1`: fractions of vertices of each colour (sum = 1).
+- `col0`, `col1`: fractions of vertices of each colour (sum = 1).
 - `e00` = (# edges between 0-colour vertices) / C(c0,2).
 - `e11` = (# edges between 1-colour vertices) / C(c1,2).
 - `e01` = (# cross-colour edges) / (c0 * c1).

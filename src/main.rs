@@ -94,12 +94,12 @@ use stats::{init_stats_writer, compute_stats, flush_stats};
 /// and return which bucket it was in. Requires canonical (u<v) inside.
 // (legacy per-edge removal/add helpers replaced by ColNetwork methods)
 
-/// Progress-bar message helper: sets "t=..., dens=..., frac1=..."
+/// Progress-bar message helper: sets "t=..., dens=..., col1=..."
 #[inline]
 fn update_bar(pb: &ProgressBar, t_now: f64, present_edges: usize, ones_count: usize, denom_pairs: f64, n: usize) {
     let density = 2.0 * (present_edges as f64) / denom_pairs;
-    let frac1 = (ones_count as f64) / (n as f64);
-    pb.set_message(format!("t={:.6}  edge_density={:.6}  colour_1_fraction={:.6}", t_now, density, frac1));
+    let col1 = (ones_count as f64) / (n as f64);
+    pb.set_message(format!("t={:.6}  edge_density={:.6}  colour_1_fraction={:.6}", t_now, density, col1));
 }
 
 /// Initialise colours (first half 0, second half 1) and adjacency matrix using kappa functions.

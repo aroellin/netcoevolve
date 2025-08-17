@@ -32,8 +32,8 @@ pub fn compute_stats(t: f64, adj: &[u8], colour: &[u8], n: usize) {
     for (i, &c) in colour.iter().enumerate() { if c == 0 { idx0.push(i); } else { idx1.push(i); } }
     let c0 = idx0.len();
     let c1 = idx1.len();
-    let frac0 = c0 as f64 / n as f64;
-    let frac1 = c1 as f64 / n as f64;
+    let col0 = c0 as f64 / n as f64;
+    let col1 = c1 as f64 / n as f64;
 
     // f32 matrices for sub-blocks
     let mut a00 = faer::Mat::<f32>::zeros(c0, c0);
@@ -95,7 +95,7 @@ pub fn compute_stats(t: f64, adj: &[u8], colour: &[u8], n: usize) {
 
     STATS_WRITER.with(|slot| {
         if let Some(w) = slot.borrow_mut().as_mut() {
-            w.write_row_extended(t, frac0, frac1, e00, e01, e11, cyc000, cyc001, cyc011, cyc111);
+            w.write_row_extended(t, col0, col1, e00, e01, e11, cyc000, cyc001, cyc011, cyc111);
         }
     });
 }
@@ -116,14 +116,14 @@ impl CsvStatsWriter {
         };
         let f = File::create(&path)?;
         let mut w = BufWriter::new(f);
-    writeln!(w, "# n={} rho={} eta={} sd0={} sd1={} sc0={} sc1={} sample_delta={} t_max={} seed={} output_file={}",
+        writeln!(w, "# n={} rho={} eta={} sd0={} sd1={} sc0={} sc1={} sample_delta={} t_max={} seed={} output_file={}",
             args.n, args.rho, args.eta, args.sd0, args.sd1, args.sc0, args.sc1, args.sample_delta, args.t_max, args.seed, path)?;
-        writeln!(w, "time,frac0,frac1,e00,e01,e11,3cyc000,3cyc001,3cyc011,3cyc111")?;
+    writeln!(w, "time,col0,col1,e00,e01,e11,3cyc000,3cyc001,3cyc011,3cyc111")?;
         Ok(Self { w })
     }
     #[inline]
-    fn write_row_extended(&mut self, t: f64, frac0: f64, frac1: f64, e00: f64, e01: f64, e11: f64, cyc000: f64, cyc001: f64, cyc011: f64, cyc111: f64) {
-        let _ = writeln!(self.w, "{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9}", t, frac0, frac1, e00, e01, e11, cyc000, cyc001, cyc011, cyc111);
+    fn write_row_extended(&mut self, t: f64, col0: f64, col1: f64, e00: f64, e01: f64, e11: f64, cyc000: f64, cyc001: f64, cyc011: f64, cyc111: f64) {
+        let _ = writeln!(self.w, "{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9}", t, col0, col1, e00, e01, e11, cyc000, cyc001, cyc011, cyc111);
     }
     fn flush(&mut self) { let _ = self.w.flush(); }
 }

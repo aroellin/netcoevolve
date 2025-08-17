@@ -2,7 +2,7 @@
 """Visualise netcoevolve simulation output (new schema).
 
 Expected CSV header (after parameter comment line):
-    time,frac0,frac1,e00,e01,e11,3cyc000,3cyc001,3cyc011,3cyc111
+    time,col0,col1,e00,e01,e11,3cyc000,3cyc001,3cyc011,3cyc111
 Triangle columns are (#type)/C(N,3); their sum is total triangle density (1 only for a complete graph).
 
 Features:
@@ -54,8 +54,8 @@ def parse_param_line(path: Path) -> dict:
 
 def compute_overall_density(df: pd.DataFrame, n: int) -> tuple[pd.Series, pd.Series]:
     # Exact: (e00*C(c0,2) + e01*c0*c1 + e11*C(c1,2)) / C(n,2)
-    f0 = df['frac0']
-    f1 = df['frac1']
+    f0 = df['col0']
+    f1 = df['col1']
     c0 = f0 * n
     c1 = f1 * n
     choose2 = lambda x: x*(x-1)/2.0
@@ -68,7 +68,7 @@ def compute_overall_density(df: pd.DataFrame, n: int) -> tuple[pd.Series, pd.Ser
 
 
 def add_triangle_normalised(df: pd.DataFrame, n: int) -> dict[str,pd.Series]:
-    f0 = df['frac0']; f1 = df['frac1']
+    f0 = df['col0']; f1 = df['col1']
     c0 = (f0 * n).round()
     c1 = (f1 * n).round()
     choose3 = lambda x: x*(x-1)*(x-2)/6.0
@@ -115,7 +115,7 @@ def main():
     except ValueError:
         n = 0
     df = pd.read_csv(path, comment='#')
-    required = {'time','frac0','frac1','e00','e01','e11'}
+    required = {'time','col0','col1','e00','e01','e11'}
     if not required.issubset(df.columns):
         print('Missing required columns for new schema.', file=sys.stderr)
         sys.exit(1)
@@ -158,8 +158,8 @@ def main():
 
     # Panel 1: colour fractions
     axc = axes[0]
-    axc.plot(tvals, df['frac0'], label='Colour 0', color='tab:blue')
-    axc.plot(tvals, df['frac1'], label='Colour 1', color='tab:orange')
+    axc.plot(tvals, df['col0'], label='Colour 0', color='tab:blue')
+    axc.plot(tvals, df['col1'], label='Colour 1', color='tab:orange')
     # Title
     axc.set_title('Colour Densities')
     axc.set_ylabel('Fraction of Vertices')
@@ -169,7 +169,7 @@ def main():
 
     # Reconstruct edge counts for concordant / discordant using N if available
     if n > 0:
-        f0 = df['frac0']; f1 = df['frac1']
+        f0 = df['col0']; f1 = df['col1']
         c0 = f0 * n
         c1 = f1 * n
         m00 = df['e00'] * c0 * (c0 - 1) / 2.0
@@ -181,7 +181,7 @@ def main():
         total_frac = concord_frac + discord_frac
     else:
         # Fallback approximate using large-n assumption
-        f0 = df['frac0']; f1 = df['frac1']
+        f0 = df['col0']; f1 = df['col1']
         concord_frac = df['e00'] * f0*f0 + df['e11'] * f1*f1
         discord_frac = df['e01'] * 2*f0*f1
         total_frac = concord_frac + discord_frac
