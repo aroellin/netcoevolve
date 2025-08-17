@@ -19,5 +19,5 @@ lto = "thin"            # Whole-program LTO
 codegen-units = 1      # Better optimisation at cost of compile time
 panic = "abort"        # Smaller / faster panic paths
 incremental = false    # Disable incremental for deterministic, faster runtime
-debug = true           
+debug = false           # Disable debug info in release builds
 # strip = "symbols"      # Remove symbols in release binary

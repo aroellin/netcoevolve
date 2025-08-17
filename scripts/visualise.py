@@ -91,7 +91,7 @@ def main():
     ap.add_argument('--split-panels', action='store_true', help='Also write each panel as an individual image (suffix -1,-2,...) when --out is used')
     ap.add_argument('--dpi', type=int, default=150, help='DPI for saved figures (default 150)')
     ap.add_argument('--ratio', type=str, help='Aspect ratio W:H for each panel (e.g. 4:3, 16:10)')
-    ap.add_argument('--show', action='store_true', help='Show interactive window')
+    ap.add_argument('--show', action='store_true', help='Also display an interactive window (default is save-only)')
     ap.add_argument('--no-partitions', action='store_true', help='Hide e00/e01/e11 lines')
     # Triangles panel now always shown (raw counts)
     args = ap.parse_args()
@@ -226,48 +226,53 @@ def main():
 
     axes[-1].set_xlabel('time')
     fig.tight_layout()
+    # Determine output path: explicit --out or derive from input CSV path
     if args.out:
         out_path = args.out if args.out.suffix else args.out.with_suffix('.png')
-        fig.savefig(out_path, dpi=args.dpi)
-        print(f'Wrote {out_path}')
-        if args.split_panels:
-            stem = out_path.stem
-            ext = out_path.suffix
-            parent = out_path.parent
-            # Map panel index to axis
-            panel_files = []
-            for idx, ax in enumerate(axes, start=1):
-                # Derive individual panel size; keep width 6 for panel export
-                ind_width = 6.0
-                if args.ratio:
-                    ind_height = ind_width * (h_ratio / w_ratio)
-                else:
-                    ind_height = 4.0
-                sub_fig = plt.figure(figsize=(ind_width, ind_height))
-                # Copy artists by re-plotting data
-                for line in ax.get_lines():
-                    sub_fig_ax = plt.gca()
-                    sub_fig_ax.plot(line.get_xdata(), line.get_ydata(),
-                                    label=line.get_label(),
-                                    color=line.get_color(),
-                                    linewidth=line.get_linewidth())
+    else:
+        # Derive default: same directory as input file with '-plot' appended to stem
+        default_name = f"{path.stem}-plot.png"
+        out_path = path.parent / default_name
+    fig.savefig(out_path, dpi=args.dpi)
+    print(f'Wrote {out_path}')
+    if args.split_panels:
+        stem = out_path.stem
+        ext = out_path.suffix
+        parent = out_path.parent
+        # Map panel index to axis
+        panel_files = []
+        for idx, ax in enumerate(axes, start=1):
+            # Derive individual panel size; keep width 6 for panel export
+            ind_width = 6.0
+            if args.ratio:
+                ind_height = ind_width * (h_ratio / w_ratio)
+            else:
+                ind_height = 4.0
+            sub_fig = plt.figure(figsize=(ind_width, ind_height))
+            # Copy artists by re-plotting data
+            for line in ax.get_lines():
                 sub_fig_ax = plt.gca()
-                # Titles / labels from original
-                sub_fig_ax.set_title(ax.get_title())
-                sub_fig_ax.set_xlabel(ax.get_xlabel())
-                sub_fig_ax.set_ylabel(ax.get_ylabel())
-                sub_fig_ax.grid(alpha=0.3)
-                if ax.get_legend() is not None:
-                    sub_fig_ax.legend(loc='upper right', fontsize='small')
-                panel_path = parent / f"{stem}-{idx}{ext}"
-                sub_fig.tight_layout()
-                sub_fig.savefig(panel_path, dpi=args.dpi)
-                plt.close(sub_fig)
-                panel_files.append(panel_path)
-            print("Wrote panel images:")
-            for p in panel_files:
-                print(f"  {p}")
-    if args.show or not args.out:
+                sub_fig_ax.plot(line.get_xdata(), line.get_ydata(),
+                                label=line.get_label(),
+                                color=line.get_color(),
+                                linewidth=line.get_linewidth())
+            sub_fig_ax = plt.gca()
+            # Titles / labels from original
+            sub_fig_ax.set_title(ax.get_title())
+            sub_fig_ax.set_xlabel(ax.get_xlabel())
+            sub_fig_ax.set_ylabel(ax.get_ylabel())
+            sub_fig_ax.grid(alpha=0.3)
+            if ax.get_legend() is not None:
+                sub_fig_ax.legend(loc='upper right', fontsize='small')
+            panel_path = parent / f"{stem}-{idx}{ext}"
+            sub_fig.tight_layout()
+            sub_fig.savefig(panel_path, dpi=args.dpi)
+            plt.close(sub_fig)
+            panel_files.append(panel_path)
+        print("Wrote panel images:")
+        for p in panel_files:
+            print(f"  {p}")
+    if args.show:
         plt.show()
 
 

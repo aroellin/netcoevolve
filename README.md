@@ -1,17 +1,6 @@
 # netcoevolve
 
-Fast stochastic coevolving network simulation with two vertex colours and adaptive edge dynamics, implemented in Rust. Includes a Python visualisation script for plotting time series of colour fractions, edge densities, and colour-partitioned triangle densities.
-
-## Features
-- Gillespie (continuous-time) simulation with five event types (colour flip via discordant-present edge; four edge add/remove processes by concordance & presence state).
-- Compact adjacency (u8) + four dense edge buckets for O(1) random edge sampling (swap–pop) and fast rate recalculation.
-- Periodic sampling at fixed time delta (SAMPLE_DELTA) writing a CSV.
-- Colour-partitioned statistics:
-  - Colour fractions: `col0`, `col1`.
-  - Edge partition densities: `e00` (between two colour-0 vertices), `e01` (cross), `e11` (between two colour-1 vertices). Each is a simple proportion of possible such edges (undirected, no loops).
-  - Triangle colour-type densities: `3cyc000`, `3cyc001`, `3cyc011`, `3cyc111`, each equal to (count of triangles of that colour multiset) / C(N,3). Their sum is the overall triangle density (equals 1 only for the complete graph).
-- Matrix-based statistics (via `faer`) for clear formulation of block adjacency and triangle counts.
-- Python plotting script auto-selects latest output if path omitted.
+Fast Rust implementation of the stochastic co-evolving network simulation introduced in the article ["Co-evolving vertex and edge dynamics in dense graphs"](https://arxiv.org/abs/2504.06493) by S. Athreya, F. Hollander, A. Röllin. Includes a Python visualisation script for plotting time series of various subgraph densities. 
 
 ## Build Requirements
 - Rust (stable) with Cargo (edition 2021).
@@ -31,23 +20,17 @@ Basic run (defaults):
 Example with custom parameters:
 ```bash
 ./target/release/netcoevolve \
-  --n 1000 \
-  --rho 1.0 \
-  --eta 1.0 \
-  --sd0 0.7 --sd1 2.0 \
-  --sc0 1.5 --sc1 0.3 \
-  --sample_delta 0.01 \
-  --t_max 5.0 \
-  --seed 42
+  --n 1000 --rho 1.0 --eta 1.0 \
+  --sd0 0.7 --sd1 2.0 --sc0 1.5 --sc1 0.3 \
+  --sample_delta 0.01 --t_max 5.0 .--seed 42
 ```
-If `--OUTPUT_FILE` is omitted a timestamped file like `output/simulation-YYYYMMDD-HHMMSS.csv` is created (directory auto-created).
 
 ### CLI Parameters
 | Flag | Meaning | Default |
 |------|---------|---------|
 | `--n` | Number of vertices | 1000 |
+| `--eta` | Colour-flip driver | 1.0 |
 | `--rho` | Global edge event rate multiplier | 1.0 |
-| `--eta` | Colour-flip driver (discordant-present) | 1.0 |
 | `--sd0` | Rate multiplier: discordant absent -> present | 0.7 |
 | `--sd1` | Rate multiplier: discordant present -> absent | 2.0 |
 | `--sc0` | Rate multiplier: concordant absent -> present | 1.5 |
@@ -55,45 +38,24 @@ If `--OUTPUT_FILE` is omitted a timestamped file like `output/simulation-YYYYMMD
 | `--sample_delta` | Time between statistic samples | 0.01 |
 | `--t_max` | Maximum simulation time | 1.0 |
 | `--seed` | RNG seed | 42 |
-| `--output_file` | CSV path (optional) | auto timestamp |
+| `--output_file` | CSV filename | output/simulation-\<timestamp\>.csv |
 
-### CSV Output Schema
-First line (comment) lists parameters, e.g.:
-```
-# n=1000 rho=1 eta=1 sd0=0.7 sd1=2 sc0=1.5 sc1=0.3 sample_delta=0.01 t_max=5 seed=42 output_file=output/simulation-20250816-120000.csv
-```
-Header line:
-```
-time,col0,col1,e00,e01,e11,3cyc000,3cyc001,3cyc011,3cyc111
-```
-Where:
-- `col0`, `col1`: fractions of vertices of each colour (sum = 1).
-- `e00` = (# edges between 0-colour vertices) / C(c0,2).
-- `e11` = (# edges between 1-colour vertices) / C(c1,2).
-- `e01` = (# cross-colour edges) / (c0 * c1).
-- Triangle density columns are each divided by C(N,3). Total triangle density = sum of the four columns.
 
 ## Visualisation
 Install Python dependencies (example using `pip`):
 ```bash
 pip install pandas matplotlib
 ```
-Run the plotter (auto-picks latest CSV in current working directory; `cd output` to pick newest there):
+Run the plotter with no arguments to visualise the most recent CSV in `output/` and save a plot as `<csv-filename>-plot.png` in the same directory as the CSV:
 ```bash
-python scripts/visualise.py --show
+python scripts/visualise.py
 ```
-Or specify a file in `output/` and save a PNG:
-```bash
-python scripts/visualise.py output/simulation-20250816-120000.csv --out run.png
-```
-Three panels are produced:
-1. Colour fractions over time.
-2. Edge densities: concordant, discordant, total.
-3. Triangle colour-type densities (per C(N,3)) and their sum (overall triangle density).
 
+Currently, three panels are produced: Colour fractions, edge densities, triangle densities.
+ 
 ## Performance Notes
 - Use `--release` for meaningful speed (LTO and optimizations configured in `Cargo.toml`).
-- Stats sampling cost grows mainly with building block matrices; reducing `SAMPLE_DELTA` increases overhead.
+- Stats sampling cost grows mainly with building block matrices; increasing `SAMPLE_DELTA` reduced overhead, but also makes the statistics less granular.
 
 ## Reproducibility
 - All simulation parameters are printed to stdout and embedded in the CSV comment line.
