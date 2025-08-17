@@ -20,9 +20,9 @@ Basic run (defaults):
 Example with custom parameters:
 ```bash
 ./target/release/netcoevolve \
-  --n 1000 --rho 1.0 --eta 1.0 \
-  --sd0 0.7 --sd1 2.0 --sc0 1.5 --sc1 0.3 \
-  --sample_delta 0.01 --t_max 5.0 .--seed 42
+  --n 500 --eta 1.0 --rho 2.0\
+  --sd0 0.0 --sd1 1.0 --sc0 0.0 --sc1 1.0 \
+  --sample_delta 0.01 --t_max 5.0 --seed 42
 ```
 
 ### CLI Parameters
