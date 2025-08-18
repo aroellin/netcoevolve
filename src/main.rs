@@ -75,6 +75,22 @@ struct Cli {
     #[arg(long = "seed", default_value_t = 42u64)]
     seed: u64,
     
+    /// p1 (initial probability a vertex has colour 1)
+    #[arg(long = "p1", default_value_t = 0.5)]
+    p1: f64,
+
+    /// p00 (initial edge probability between two colour-0 vertices)
+    #[arg(long = "p00", default_value_t = 0.2)]
+    p00: f64,
+
+    /// p01 (initial edge probability between different-colour vertices)
+    #[arg(long = "p01", default_value_t = 0.8)]
+    p01: f64,
+
+    /// p11 (initial edge probability between two colour-1 vertices)
+    #[arg(long = "p11", default_value_t = 0.2)]
+    p11: f64,
+
     /// output_file (CSV path; default auto timestamp)
     #[arg(long = "output")]
     output_file: Option<String>,
@@ -102,18 +118,17 @@ fn update_bar(pb: &ProgressBar, t_now: f64, present_edges: usize, ones_count: us
     pb.set_message(format!("t={:.6}  edge_density={:.6}  colour_1_fraction={:.6}", t_now, density, col1));
 }
 
-/// Initialise colours (first half 0, second half 1) and adjacency matrix using kappa functions.
-fn initialise_colours_and_adjacency<R: Rng>(colour: &mut [u8], adj: &mut [u8], n: usize, rng: &mut R) {
+/// Initialise colours iid Bernoulli(p1) and adjacency with probabilities p00/p01/p11.
+fn initialise_colours_and_adjacency<R: Rng>(colour: &mut [u8], adj: &mut [u8], n: usize, rng: &mut R,
+    p1: f64, p00: f64, p01: f64, p11: f64) {
     debug_assert!(colour.len() == n && adj.len() == n * n);
-    for i in 0..n { colour[i] = if (i as f64) / (n as f64) < 0.5 { 0 } else { 1 }; }
-    #[inline] fn kappa_c(_x: f64, _y: f64) -> f64 { 0.2 }
-    #[inline] fn kappa_d(_x: f64, _y: f64) -> f64 { 0.8 }
-    for u in 0..(n as u32) {
-        for v in (u + 1)..(n as u32) {
-            let same = colour[u as usize] == colour[v as usize];
-            let p = if same { kappa_c(0.0,0.0) } else { kappa_d(0.0,0.0) }; // simplified; original x,y unused
+    for i in 0..n { colour[i] = if rng.random::<f64>() < p1 { 1 } else { 0 }; }
+    for u in 0..n {
+        for v in (u + 1)..n {
+            let cu = colour[u]; let cv = colour[v];
+            let p = match (cu, cv) { (0,0) => p00, (1,1) => p11, _ => p01 };
             let present = rng.random::<f64>() < p;
-            set_edge(adj, n, u as usize, v as usize, present);
+            set_edge(adj, n, u, v, present);
         }
     }
 }
@@ -151,6 +166,10 @@ fn main() {
     println!("  sd1            = {}", args.sd1);
     println!("  sc0            = {}", args.sc0);
     println!("  sc1            = {}", args.sc1);
+    println!("  p1             = {}", args.p1);
+    println!("  p00            = {}", args.p00);
+    println!("  p01            = {}", args.p01);
+    println!("  p11            = {}", args.p11);
     println!("  output         = {}", output_path);
     println!();
 
@@ -171,7 +190,8 @@ fn main() {
     // Initialise colours + adjacency via helper, then wrap in ColNetwork
     let mut adj: Vec<u8> = vec![0; n * n];
     let mut colour: Vec<u8> = vec![0; n];
-    initialise_colours_and_adjacency(&mut colour, &mut adj, n, &mut rng);
+    initialise_colours_and_adjacency(&mut colour, &mut adj, n, &mut rng,
+        args.p1, args.p00, args.p01, args.p11);
     let mut net = ColNetwork::new(adj, colour);
 
     // Precompute normaliser for density: N*(N-1)

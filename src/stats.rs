@@ -116,8 +116,8 @@ impl CsvStatsWriter {
         };
         let f = File::create(&path)?;
         let mut w = BufWriter::new(f);
-        writeln!(w, "# n={} rho={} eta={} sd0={} sd1={} sc0={} sc1={} sample_delta={} t_max={} seed={} output_file={}",
-            args.n, args.rho, args.eta, args.sd0, args.sd1, args.sc0, args.sc1, args.sample_delta, args.t_max, args.seed, path)?;
+        writeln!(w, "# n={} rho={} eta={} sd0={} sd1={} sc0={} sc1={} p1={} p00={} p01={} p11={} sample_delta={} t_max={} seed={} output_file={}",
+            args.n, args.rho, args.eta, args.sd0, args.sd1, args.sc0, args.sc1, args.p1, args.p00, args.p01, args.p11, args.sample_delta, args.t_max, args.seed, path)?;
     writeln!(w, "time,col0,col1,e00,e01,e11,3cyc000,3cyc001,3cyc011,3cyc111")?;
         Ok(Self { w })
     }

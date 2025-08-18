@@ -15,9 +15,19 @@ faer = { version = ">=0.22" }
 # High-performance build settings
 [profile.release]
 opt-level = 3          # Max optimisation
-lto = "thin"            # Whole-program LTO
+lto = "fat"            # Whole-program LTO
 codegen-units = 1      # Better optimisation at cost of compile time
 panic = "abort"        # Smaller / faster panic paths
 incremental = false    # Disable incremental for deterministic, faster runtime
 debug = false           # Disable debug info in release builds
-# strip = "symbols"      # Remove symbols in release binary
+strip = "symbols"      # Remove symbols in release binary
+
+# debug
+[profile.dev]
+opt-level = 1          # Debugging info
+lto = "off"            # No LTO
+codegen-units = 256    # More codegen units for faster compile times
+panic = "unwind"       # Unwinding for better debugging
+incremental = true     # Enable incremental compilation
+debug = true           # Enable debug info in debug builds
+strip = "none"         # Keep all symbols in debug builds

@@ -158,8 +158,8 @@ def main():
 
     # Panel 1: colour fractions
     axc = axes[0]
-    axc.plot(tvals, df['col0'], label='Colour 0', color='tab:blue')
-    axc.plot(tvals, df['col1'], label='Colour 1', color='tab:orange')
+    axc.plot(tvals, df['col0'], label='Colour 0', color='#44c774')
+    axc.plot(tvals, df['col1'], label='Colour 1', color='#532784')
     # Title
     axc.set_title('Colour Densities')
     axc.set_ylabel('Fraction of Vertices')
@@ -189,8 +189,8 @@ def main():
     # Panel 2: edge densities aggregated
     axe = axes[1]
     axe.plot(tvals, total_frac, label='Total Edge Density', color='black', zorder=3)
-    axe.plot(tvals, concord_frac, label='Concordant Edge Density (0–0, 1–1)', color='green')
-    axe.plot(tvals, discord_frac, label='Discordant edge density (0–1)', color='red')
+    axe.plot(tvals, concord_frac, label='Concordant Edge Density (0–0, 1–1)', color='#ffbe83')
+    axe.plot(tvals, discord_frac, label='Discordant edge density (0–1)', color='#df4d70')
     axe.set_title('Edge Densities')
     axe.set_ylabel('Fraction of Edges')
     axe.set_ylim(0,1)
@@ -264,6 +264,9 @@ def main():
             sub_fig_ax.grid(alpha=0.3)
             if ax.get_legend() is not None:
                 sub_fig_ax.legend(loc='upper right', fontsize='small')
+            # Enforce [0,1] y-limits for the first two panels (colour fractions, edge densities)
+            if idx in (1,2):
+                sub_fig_ax.set_ylim(0,1)
             panel_path = parent / f"{stem}-{idx}{ext}"
             sub_fig.tight_layout()
             sub_fig.savefig(panel_path, dpi=args.dpi)
