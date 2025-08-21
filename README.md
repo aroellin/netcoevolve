@@ -100,6 +100,3 @@ python scripts/visualise.py --out plot.png --split-panels
 ## Reproducibility
 - All simulation parameters are printed to stdout and embedded in the CSV comment line.
 - RNG is deterministic given `--SEED`.
-
----
-Feel free to open an issue or PR once this is hosted on GitHub for improvements or feature requests.
