@@ -39,9 +39,13 @@ struct Cli {
     #[arg(long = "n", default_value_t = 1000u32)]
     n: u32,
 
-    /// rho (rate multiplier, default 1.0)
-    #[arg(long = "rho", default_value_t = 1.0)]
-    rho: f64,
+    /// rho (rate multiplier, default 1.0 unless --beta used)
+    #[arg(long = "rho")]
+    rho: Option<f64>,
+
+    /// beta (sets rho = n / beta; leaves eta unchanged)
+    #[arg(long = "beta")]
+    beta: Option<f64>,
 
     /// eta (base for discordant-present driven colour flips)
     #[arg(long = "eta", default_value_t = 1.0)]
@@ -71,9 +75,9 @@ struct Cli {
     #[arg(long = "sc1", default_value_t = 0.3)]
     sc1: f64,
 
-    /// RNG seed
-    #[arg(long = "seed", default_value_t = 42u64)]
-    seed: u64,
+    /// RNG seed; use --seed=random for time-based seed
+    #[arg(long = "seed", default_value = "42")]
+    seed: String,
     
     /// p1 (initial probability a vertex has colour 1)
     #[arg(long = "p1", default_value_t = 0.5)]
@@ -137,13 +141,23 @@ fn initialise_colours_and_adjacency<R: Rng>(colour: &mut [u8], adj: &mut [u8], n
 // build_buckets_and_positions now handled inside ColNetwork::new
 
 fn main() {
-    let args = Cli::parse();
+    let mut args = Cli::parse();
 
     let n = args.n as usize;
     assert!(n >= 2, "N must be at least 2");
+    
+    // Keep originals for display if beta provided
+    let mut rho = args.rho.unwrap_or(1.0);
+    if let Some(beta) = args.beta {
+        assert!(beta > 0.0, "beta must be > 0");
+        assert!(args.rho.is_none(), "Cannot specify both --rho and --beta");
+        // Updated semantics: rho = n / beta, eta unchanged
+        rho = (n as f64) / beta;
+        args.rho = Some(rho); // reflect effective rho in args for stats
+        // args.eta remains unchanged
+    }
 
-    // Derived and display parameters
-    let rho = args.rho;
+    // Derived and display parameters (rho possibly overridden)
     let t_max = args.t_max;
     let sample_delta = args.sample_delta;
 
@@ -156,12 +170,30 @@ fn main() {
 
     // ---- Print all parameters up-front (for reproducibility) ----
     println!("Parameters:");
-    println!("  seed           = {}", args.seed);
+    // Determine effective seed (support --seed=random)
+    let seed_arg = args.seed.clone();
+    let (effective_seed, seed_random) = if seed_arg.eq_ignore_ascii_case("random") {
+        // Generate a small reproducible seed (0..=65535) from current time.
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let raw = now.as_nanos();
+        // Simple bit fold then mask to 16 bits for manageability
+        let folded = raw ^ (raw >> 17) ^ (raw >> 33);
+        (((folded as u64) & 0xFFFF), true)
+    } else {
+        (seed_arg.parse::<u64>().expect("seed must be an integer or 'random'"), false)
+    };
+    println!("  seed           = {}{}", effective_seed, if seed_random { " (random)" } else { "" });
     println!("  sample_delta   = {}", args.sample_delta);
     println!("  t_max          = {}", args.t_max);
     println!("  n              = {}", args.n);
-    println!("  rho            = {}", args.rho);
-    println!("  eta            = {}", args.eta);
+    if let Some(beta) = args.beta {
+        println!("  rho            = {} = n / {}", rho, beta);
+        println!("  eta            = {}", args.eta);
+    } else {
+        println!("  rho            = {}", rho);
+        println!("  eta            = {}", args.eta);
+    }
     println!("  sd0            = {}", args.sd0);
     println!("  sd1            = {}", args.sd1);
     println!("  sc0            = {}", args.sc0);
@@ -185,7 +217,7 @@ fn main() {
     );
 
     // RNG (non-crypto)
-    let mut rng = Xoshiro256PlusPlus::seed_from_u64(args.seed);
+    let mut rng = Xoshiro256PlusPlus::seed_from_u64(effective_seed);
 
     // Initialise colours + adjacency via helper, then wrap in ColNetwork
     let mut adj: Vec<u8> = vec![0; n * n];
@@ -202,10 +234,11 @@ fn main() {
     let mut samples_done: u64 = 0;
     let mut sim_steps: u64 = 0;
     let mut sim_steps_v: u64 = 0; // colour flips
+    let mut absorbing_state = false;
     let started = Instant::now();
 
     // Statistics writer init + header (compute_stats will append rows)
-    init_stats_writer(Some(output_path.clone()), &args);
+    init_stats_writer(Some(output_path.clone()), &args, effective_seed, seed_random);
     compute_stats(0.0, net.adj(), net.colour(), n);
 
     while t < t_max {
@@ -235,7 +268,20 @@ fn main() {
             rho * args.sd1 * (net.bucket_len(bidx(BucketKind::D1)) as f64)
         } else { 0.0 };
         let r_tot = r0 + r1 + r2 + r3 + r4;
-        if r_tot <= 0.0 { break; }
+        if r_tot <= 0.0 {
+            absorbing_state = true;
+            // Fill remaining sampling points with constant state
+            while samples_done <= total_ticks {
+                let tick_t = (samples_done as f64) * sample_delta;
+                if tick_t > t_max + 1e-12 { break; }
+                pb.set_position(samples_done.min(total_ticks));
+                update_bar(&pb, t, net.present_edges(), net.ones_count(), denom_pairs, n);
+                compute_stats(tick_t.min(t_max), net.adj(), net.colour(), n);
+                samples_done += 1;
+            }
+            t = t_max; // jump to end
+            break;
+        }
 
         // Δt from one Exp(1): Δt = E / R
         let e1: f64 = Exp1.sample(&mut rng);
@@ -281,12 +327,21 @@ fn main() {
         sim_steps += 1;
     }
 
+    // absorbing_state continuation handled inside loop when detected
+
     // Final progress update
     pb.set_position(total_ticks);
     update_bar(&pb, t, net.present_edges(), net.ones_count(), denom_pairs, n);
     flush_stats();
-    pb.finish_with_message(format!(
-        "Done. t={:.6}, steps={}, flips={}, elapsed={:?}",
-        t, sim_steps, sim_steps_v, started.elapsed()
-    ));
+    if absorbing_state {
+        pb.finish_with_message(format!(
+            "Done (absorbing). t={:.6}, steps={}, flips={}, elapsed={:?}",
+            t, sim_steps, sim_steps_v, started.elapsed()
+        ));
+    } else {
+        pb.finish_with_message(format!(
+            "Done. t={:.6}, steps={}, flips={}, elapsed={:?}",
+            t, sim_steps, sim_steps_v, started.elapsed()
+        ));
+    }
 }

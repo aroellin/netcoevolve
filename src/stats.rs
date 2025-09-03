@@ -16,9 +16,9 @@ thread_local! {
     static STATS_WRITER: std::cell::RefCell<Option<CsvStatsWriter>> = std::cell::RefCell::new(None);
 }
 
-pub fn init_stats_writer(path_opt: Option<String>, args: &Cli) {
+pub fn init_stats_writer(path_opt: Option<String>, args: &Cli, effective_seed: u64, seed_random: bool) {
     STATS_WRITER.with(|slot| {
-        *slot.borrow_mut() = Some(CsvStatsWriter::new(path_opt, args).expect("create output CSV"));
+    *slot.borrow_mut() = Some(CsvStatsWriter::new(path_opt, args, effective_seed, seed_random).expect("create output CSV"));
     });
 }
 
@@ -106,7 +106,7 @@ pub fn flush_stats() {
 
 struct CsvStatsWriter { w: BufWriter<File> }
 impl CsvStatsWriter {
-    fn new(path_opt: Option<String>, args: &Cli) -> std::io::Result<Self> {
+    fn new(path_opt: Option<String>, args: &Cli, effective_seed: u64, seed_random: bool) -> std::io::Result<Self> {
         // Ensure output directory exists
         let out_dir = std::path::Path::new("output");
         if !out_dir.exists() { let _ = create_dir_all(out_dir); }
@@ -116,8 +116,30 @@ impl CsvStatsWriter {
         };
         let f = File::create(&path)?;
         let mut w = BufWriter::new(f);
-        writeln!(w, "# n={} rho={} eta={} sd0={} sd1={} sc0={} sc1={} p1={} p00={} p01={} p11={} sample_delta={} t_max={} seed={} output_file={}",
-            args.n, args.rho, args.eta, args.sd0, args.sd1, args.sc0, args.sc1, args.p1, args.p00, args.p01, args.p11, args.sample_delta, args.t_max, args.seed, path)?;
+        // Provide informative rho/eta if beta was used. We infer beta if rho not provided originally via CLI.
+        // Since main mutates args.rho/eta to effective values when beta used, we only know beta explicitly if both
+        // effective rho equals n * (some beta) and user didn't pass rho. For simplicity the main program passes mutated args
+        // so we cannot reconstruct beta numerically safely here; header focuses on effective values.
+            writeln!(w, "# n={} rho={} eta={} sd0={} sd1={} sc0={} sc1={} p1={} p00={} p01={} p11={} sample_delta={} t_max={} seed={}{} output_file={}",
+                args.n,
+                args.rho.unwrap_or(1.0),
+                args.eta,
+                args.sd0,
+                args.sd1,
+                args.sc0,
+                args.sc1,
+                args.p1,
+                args.p00,
+                args.p01,
+                args.p11,
+                args.sample_delta,
+                args.t_max,
+                effective_seed,
+                if seed_random { " (random)" } else { "" },
+                path)?;
+        if let Some(beta) = args.beta {
+            writeln!(w, "# beta={} (rho = n / beta)", beta)?;
+        }
     writeln!(w, "time,col0,col1,e00,e01,e11,3cyc000,3cyc001,3cyc011,3cyc111")?;
         Ok(Self { w })
     }
