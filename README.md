@@ -2,11 +2,6 @@
 
 Fast Rust implementation of the stochastic co-evolving network simulation introduced in the article ["Co-evolving vertex and edge dynamics in dense graphs"](https://arxiv.org/abs/2504.06493) by S. Athreya, F. Hollander, A. Röllin. Includes a Python visualisation script for plotting time series of various subgraph densities.
 
-Recent additions:
-- `--beta` convenience parameter (sets `rho = n / beta`, leaves `eta` unchanged; cannot be used with `--rho`).
-- `--seed=random` picks a small (0..=65535) time-based seed; the effective value is printed and written into the CSV for reproducibility.
-- If the dynamics reach an absorbing configuration (no further events possible) the program continues sampling a static state until `t_max` so output length is consistent.
-
 ## Build Requirements
 - Rust (stable) with Cargo (edition 2021).
 - Python 3.9+ (for visualisation) with packages: `pandas`, `matplotlib` (and `numpy`, installed as a dependency).
