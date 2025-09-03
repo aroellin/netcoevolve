@@ -1,6 +1,11 @@
 # netcoevolve
 
-Fast Rust implementation of the stochastic co-evolving network simulation introduced in the article ["Co-evolving vertex and edge dynamics in dense graphs"](https://arxiv.org/abs/2504.06493) by S. Athreya, F. Hollander, A. Röllin. Includes a Python visualisation script for plotting time series of various subgraph densities. 
+Fast Rust implementation of the stochastic co-evolving network simulation introduced in the article ["Co-evolving vertex and edge dynamics in dense graphs"](https://arxiv.org/abs/2504.06493) by S. Athreya, F. Hollander, A. Röllin. Includes a Python visualisation script for plotting time series of various subgraph densities.
+
+Recent additions:
+- `--beta` convenience parameter (sets `rho = n / beta`, leaves `eta` unchanged; cannot be used with `--rho`).
+- `--seed=random` picks a small (0..=65535) time-based seed; the effective value is printed and written into the CSV for reproducibility.
+- If the dynamics reach an absorbing configuration (no further events possible) the program continues sampling a static state until `t_max` so output length is consistent.
 
 ## Build Requirements
 - Rust (stable) with Cargo (edition 2021).
@@ -40,7 +45,8 @@ Parameters to control simulation dynamics:
 |------|---------|---------|
 | `--n` | Number of vertices | 1000 |
 | `--eta` | Colour-flip driver | 1.0 |
-| `--rho` | Global edge event rate multiplier | 1.0 |
+| `--rho` | Global edge event rate multiplier (mutually exclusive with `--beta`) | 1.0 |
+| `--beta` | Convenience: sets `rho = n / beta` | (none) |
 | `--sd0` | Rate multiplier: discordant absent -> present | 0.7 |
 | `--sd1` | Rate multiplier: discordant present -> absent | 2.0 |
 | `--sc0` | Rate multiplier: concordant absent -> present | 1.5 |
@@ -62,7 +68,7 @@ Parameters for simulation control:
 |------|---------|---------|
 | `--sample_delta` | Time between statistic samples | 0.01 |
 | `--t_max` | Maximum simulation time | 1.0 |
-| `--seed` | RNG seed | 42 |
+| `--seed` | RNG seed (integer) or `random` (time-based 0..65535) | 42 |
 | `--output` | CSV filename | output/simulation-\<timestamp\>.csv |
 
 ## Visualisation
@@ -93,10 +99,13 @@ python scripts/visualise.py --out plot.png --split-panels
 
 
 
+## Absorbing States
+If the system reaches a state with zero total event rate (no colour flips or edge changes possible under the current parameters), the simulation flags an absorbing state and keeps emitting samples at the frozen configuration until `t_max`. The final progress message is annotated with `(absorbing)`.
+
 ## Performance Notes
 - Use `--release` for meaningful speed (LTO and optimizations configured in `Cargo.toml`).
 - Stats sampling cost grows mainly with building block matrices; increasing `SAMPLE_DELTA` reduced overhead, but also makes the statistics less granular.
 
 ## Reproducibility
-- All simulation parameters are printed to stdout and embedded in the CSV comment line.
-- RNG is deterministic given `--SEED`.
+- All simulation parameters (including the resolved seed, and effective `rho` when using `--beta`) are printed to stdout and embedded in the CSV comment line.
+- `--seed=random` still yields a deterministic run once the printed seed value is reused.
