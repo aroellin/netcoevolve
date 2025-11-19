@@ -79,6 +79,7 @@ pub struct ColNetwork {
     buckets: [Bucket; 4],
     present_edges: usize,
     ones_count: usize,
+    pub(crate) last_flip: Vec<f64>, // time of last colour flip for each vertex (initial 0.0)
 }
 
 impl ColNetwork {
@@ -115,6 +116,7 @@ impl ColNetwork {
             buckets,
             present_edges,
             ones_count,
+            last_flip: vec![0.0; n as usize],
         }
     }
 
@@ -168,7 +170,7 @@ impl ColNetwork {
     }
 
     /// Flip colour of vertex u and reclassify all incident edges.
-    pub fn flip_colour(&mut self, u: u32) {
+    pub fn flip_colour(&mut self, u: u32, t: f64) {
         let n = self.n as usize;
         let uidx = u as usize;
         let old = self.colour[uidx];
@@ -220,6 +222,8 @@ impl ColNetwork {
             let idx = self.buckets[bidx(b_new)].push(a, b);
             self.pos[tri_index(a, b)] = idx as u32;
         }
+        // Record flip time
+        self.last_flip[uidx] = t;
     }
 
     /// Set adjacency (symmetric)
@@ -234,4 +238,6 @@ impl ColNetwork {
     pub fn bucket_len(&self, i: usize) -> usize { self.buckets[i].len() }
     #[inline]
     pub fn bucket_is_empty(&self, i: usize) -> bool { self.buckets[i].is_empty() }
+    #[inline]
+    pub fn last_flip_times(&self) -> &[f64] { &self.last_flip }
 }

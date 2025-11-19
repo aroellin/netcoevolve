@@ -43,7 +43,7 @@ struct Cli {
     #[arg(long = "rho")]
     rho: Option<f64>,
 
-    /// beta (sets rho = n / beta; leaves eta unchanged)
+    /// beta (sets rho = n and eta = beta)
     #[arg(long = "beta")]
     beta: Option<f64>,
 
@@ -84,20 +84,24 @@ struct Cli {
     p1: f64,
 
     /// p00 (initial edge probability between two colour-0 vertices)
-    #[arg(long = "p00", default_value_t = 0.2)]
+    #[arg(long = "p00", default_value_t = 0.5)]
     p00: f64,
 
     /// p01 (initial edge probability between different-colour vertices)
-    #[arg(long = "p01", default_value_t = 0.8)]
+    #[arg(long = "p01", default_value_t = 0.5)]
     p01: f64,
 
     /// p11 (initial edge probability between two colour-1 vertices)
-    #[arg(long = "p11", default_value_t = 0.2)]
+    #[arg(long = "p11", default_value_t = 0.5)]
     p11: f64,
 
     /// output_file (CSV path; default auto timestamp)
     #[arg(long = "output")]
     output_file: Option<String>,
+
+    /// dump_adj (if set, dump adjacency matrix each sample; reordered: all 0s then 1s, degree-ascending within group)
+    #[arg(long = "dump_adj", default_value_t = false)]
+    dump_adj: bool,
 }
 // (stats module handles its own file I/O; no direct file imports needed here)
 mod stats;
@@ -151,10 +155,10 @@ fn main() {
     if let Some(beta) = args.beta {
         assert!(beta > 0.0, "beta must be > 0");
         assert!(args.rho.is_none(), "Cannot specify both --rho and --beta");
-        // Updated semantics: rho = n / beta, eta unchanged
-        rho = (n as f64) / beta;
-        args.rho = Some(rho); // reflect effective rho in args for stats
-        // args.eta remains unchanged
+        // New semantics: when beta is set, set eta = beta and rho = n
+        args.eta = beta;             // eta equals beta
+        rho = n as f64;              // rho equals n
+        args.rho = Some(rho);        // reflect effective rho in args for stats
     }
 
     // Derived and display parameters (rho possibly overridden)
@@ -187,9 +191,9 @@ fn main() {
     println!("  sample_delta   = {}", args.sample_delta);
     println!("  t_max          = {}", args.t_max);
     println!("  n              = {}", args.n);
-    if let Some(beta) = args.beta {
-        println!("  rho            = {} = n / {}", rho, beta);
-        println!("  eta            = {}", args.eta);
+    if args.beta.is_some() {
+        println!("  rho            = {} = n", rho);
+        println!("  eta            = {} = beta", args.eta);
     } else {
         println!("  rho            = {}", rho);
         println!("  eta            = {}", args.eta);
@@ -238,8 +242,8 @@ fn main() {
     let started = Instant::now();
 
     // Statistics writer init + header (compute_stats will append rows)
-    init_stats_writer(Some(output_path.clone()), &args, effective_seed, seed_random);
-    compute_stats(0.0, net.adj(), net.colour(), n);
+    init_stats_writer(Some(output_path.clone()), &args, effective_seed, seed_random, args.dump_adj);
+    compute_stats(0.0, net.adj(), net.colour(), net.last_flip_times(), n);
 
     while t < t_max {
         // Sampling tick? update progress + (later) stats
@@ -247,7 +251,7 @@ fn main() {
         if t >= next_tick_t {
             pb.set_position(samples_done.min(total_ticks));
             update_bar(&pb, t, net.present_edges(), net.ones_count(), denom_pairs, n);
-            compute_stats(t, net.adj(), net.colour(), n);
+            compute_stats(t, net.adj(), net.colour(), net.last_flip_times(), n);
             samples_done += 1;
         }
 
@@ -276,7 +280,7 @@ fn main() {
                 if tick_t > t_max + 1e-12 { break; }
                 pb.set_position(samples_done.min(total_ticks));
                 update_bar(&pb, t, net.present_edges(), net.ones_count(), denom_pairs, n);
-                compute_stats(tick_t.min(t_max), net.adj(), net.colour(), n);
+                compute_stats(tick_t.min(t_max), net.adj(), net.colour(), net.last_flip_times(), n);
                 samples_done += 1;
             }
             t = t_max; // jump to end
@@ -299,7 +303,7 @@ fn main() {
             0 => {
                 if let Some((u,v)) = net.pick_random(bidx(BucketKind::D1), &mut rng) {
                     let u0 = if rng.random::<bool>() { u } else { v }; // endpoint to flip
-                    net.flip_colour(u0);
+                    net.flip_colour(u0, t);
                     sim_steps_v += 1;
                 }
             }

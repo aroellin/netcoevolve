@@ -41,7 +41,7 @@ Parameters to control simulation dynamics:
 | `--n` | Number of vertices | 1000 |
 | `--eta` | Colour-flip driver | 1.0 |
 | `--rho` | Global edge event rate multiplier (mutually exclusive with `--beta`) | 1.0 |
-| `--beta` | Convenience: sets `rho = n / beta` | (none) |
+| `--beta` | Convenience: sets `rho = n` and `eta = beta` | (none) |
 | `--sd0` | Rate multiplier: discordant absent -> present | 0.7 |
 | `--sd1` | Rate multiplier: discordant present -> absent | 2.0 |
 | `--sc0` | Rate multiplier: concordant absent -> present | 1.5 |
@@ -65,18 +65,70 @@ Parameters for simulation control:
 | `--t_max` | Maximum simulation time | 1.0 |
 | `--seed` | RNG seed (integer) or `random` (time-based 0..65535) | 42 |
 | `--output` | CSV filename | output/simulation-\<timestamp\>.csv |
+| `--dump_adj` | Save adjacency matrix snapshots to a subdirectory | (disabled) |
 
-## Visualisation
+## Visualisation & Analysis
 Install Python dependencies (example using `pip`):
 ```bash
 pip install pandas matplotlib
 ```
-Run the plotter with no arguments to visualise the most recent CSV in `output/` and save a plot as `<csv-filename>-plot.png` in the same directory as the CSV:
+
+The `scripts/` directory contains several Python tools for analysing simulation results.
+
+### Time Series Plotting (`visualise.py`)
+Plots time series of edge densities, colour fractions, and triangle densities from a simulation CSV.
+
 ```bash
-python scripts/visualise.py
+python scripts/visualise.py [simulation.csv] [options]
+```
+Common options:
+- `--out <file>`: Save plot to file (e.g., `plot.png`).
+- `--split-panels`: Save each panel (colours, edges, triangles) as a separate image.
+- `--triangles`: Explicitly show the triangles panel (if not shown by default).
+- `--show`: Display the plot interactively.
+
+### Unified Analysis & Animation (`analyse.py`)
+A unified CLI for processing adjacency snapshots (requires `--dump_adj`). Supersedes the legacy `heatmap.py`.
+
+#### Animation
+Render an animation of the network's adjacency matrix over time.
+
+```bash
+# Animate with global degree ordering (all vertices sorted by degree)
+python scripts/analyse.py animate output/simulation-<timestamp>-adj --order global-degree
+
+# Animate with community-aware ordering (sorted within colour groups)
+python scripts/analyse.py animate output/simulation-<timestamp>-adj --order degree
+```
+Common animation options:
+- `--out <file.mp4>`: Save to video (requires ffmpeg).
+- `--interval <ms>`: Frame delay.
+- `--avg <k>`: Apply kxk averaging kernel (smooths the display).
+
+#### Diagnostics
+Compute spectral and rank-1 approximation metrics for the adjacency snapshots.
+
+```bash
+# Compute basic rank-1 metrics
+python scripts/analyse.py diagnostics output/simulation-<timestamp>-adj --rank1
+
+# Compute extended metrics (block-level spectral stats, correlations)
+python scripts/analyse.py diagnostics output/simulation-<timestamp>-adj --extended --csv diagnostics.csv
 ```
 
-Currently, three panels are produced: Colour fractions, edge densities, triangle densities.
+### Polarisation Analysis (`polarisation.py`)
+Scans a directory of simulation outputs to detect if and when the network polarised (stabilised into fixed colour fractions).
+
+```bash
+python scripts/polarisation.py --dir output --out summary.csv
+```
+
+### GUI Dispatcher (`dispatch.py`)
+A Tkinter-based GUI for managing batches of simulations, useful for exploring parameter spaces (e.g., varying `n` and `eta`).
+
+```bash
+python scripts/dispatch.py
+```
 
 ## Figures from the article
 
