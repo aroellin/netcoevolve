@@ -259,6 +259,8 @@ class DispatcherThread(threading.Thread):
         # omitting it makes the binary use its default (42).
         if seed_val:
             cmd += ["--seed", seed_val]
+        if self.config.get("dump_adj"):
+            cmd.append("--dump_adj")
         # Optional probability parameters if provided
         for key in ("p1", "p00", "p01", "p11"):
             v = self.config.get(key)
@@ -448,11 +450,13 @@ class App(tk.Tk):
         # Row 6: Rho and probability parameters
         self.rho_equals_n_var = tk.BooleanVar(value=True)
         self.rho_value_var = tk.DoubleVar(value=0.0)
+        self.dump_adj_var = tk.BooleanVar(value=False)
         rho_frame = ttk.Frame(params)
         rho_frame.grid(row=6, column=0, columnspan=3, sticky=tk.W, padx=4, pady=4)
         ttk.Checkbutton(rho_frame, text="rho = n", variable=self.rho_equals_n_var).pack(side=tk.LEFT, padx=(0,10))
         ttk.Label(rho_frame, text="rho (when not n):").pack(side=tk.LEFT)
         ttk.Entry(rho_frame, textvariable=self.rho_value_var, width=8).pack(side=tk.LEFT, padx=(4,10))
+        ttk.Checkbutton(rho_frame, text="Dump Adj", variable=self.dump_adj_var).pack(side=tk.LEFT, padx=(0,10))
         # p-parameters (optional)
         self.p1_var = tk.StringVar(value="")
         self.p00_var = tk.StringVar(value="")
@@ -601,6 +605,7 @@ class App(tk.Tk):
             "t_max": float(self.t_max_var.get()),
             "seed": self.seed_var.get(),
             "rho_equals_n": bool(self.rho_equals_n_var.get()),
+            "dump_adj": bool(self.dump_adj_var.get()),
         }
         if not config["rho_equals_n"]:
             try:
