@@ -30,6 +30,68 @@ def darken_color(color: str, factor: float = 0.4):
         return color
 
 
+def get_canonical_and_divisor(pattern: str) -> tuple[str, float]:
+    """Parse subgraph pattern string to (canonical_column, multiplicity_divisor)."""
+    # 3-star: 3sC_XYZ (e.g. 3s0_010)
+    if pattern.startswith('3s'):
+        parts = pattern.split('_')
+        if len(parts) != 2:
+            raise ValueError(f"Invalid 3-star pattern {pattern}")
+        center = parts[0][2:] # '0' or '1'
+        leaves = parts[1]
+        if len(leaves) != 3:
+            raise ValueError(f"Invalid leaves in {pattern}")
+        # Sort leaves to find canonical column name
+        sorted_leaves = "".join(sorted(leaves))
+        col = f"3s{center}_{sorted_leaves}"
+        # Multiplicity: 
+        # All same (e.g. 000) -> 1 permutation
+        # 2 same (e.g. 001) -> 3 permutations
+        # All diff -> 6 permutations
+        unique = len(set(leaves))
+        if unique == 1: div = 1.0
+        elif unique == 2: div = 3.0
+        else: div = 6.0
+        return col, div
+
+    # 3-path: 3pABCD (e.g. 3p0001)
+    if pattern.startswith('3p'):
+        seq = pattern[2:]
+        if len(seq) != 4:
+            raise ValueError(f"Invalid 3-path pattern {pattern}")
+        rev_seq = seq[::-1]
+        col_seq = min(seq, rev_seq)
+        col = f"3p{col_seq}"
+        div = 2.0 if seq != rev_seq else 1.0
+        return col, div
+    
+    # 2-path: 2pABC (e.g. 2p010)
+    if pattern.startswith('2p'):
+        seq = pattern[2:]
+        if len(seq) != 3:
+            raise ValueError(f"Invalid 2-path pattern {pattern}")
+        rev_seq = seq[::-1]
+        col_seq = min(seq, rev_seq)
+        col = f"2p{col_seq}"
+        div = 2.0 if seq != rev_seq else 1.0
+        return col, div
+        
+    # Triangle: 3cycABC (e.g. 3cyc001)
+    if pattern.startswith('3cyc'):
+        seq = pattern[4:]
+        if len(seq) != 3:
+            raise ValueError(f"Invalid triangle pattern {pattern}")
+        col_seq = "".join(sorted(seq))
+        col = f"3cyc{col_seq}"
+        unique = len(set(seq))
+        if unique == 1: div = 1.0
+        elif unique == 2: div = 3.0
+        else: div = 6.0
+        return col, div
+        
+    raise ValueError(f"Unknown pattern type: {pattern}")
+
+
 def latest_csv() -> Path | None:
     """Find newest simulation CSV in current directory or output/ subdir.
 
@@ -113,6 +175,7 @@ def main():
     ap.add_argument('--3stars', dest='three_stars', action='store_true', help='Show 3-star panel from 3s*_*** columns')
     ap.add_argument('--all', action='store_true', help='Enable all subgraph panels (triangles, 2-paths, 3-paths, 3-stars)')
     ap.add_argument('--projections', action='store_true', help='Overlay composition-based projections (dotted) on triangles and two-paths panels')
+    ap.add_argument('--pair', nargs=2, metavar=('P1', 'P2'), help='Plot comparison of two specific subgraph patterns (e.g. 3p0001 3s0_010)')
     # Triangles panel optional (raw counts)
     args = ap.parse_args()
 
@@ -164,6 +227,8 @@ def main():
     if three_paths_flag:
         n_rows += 1
     if three_stars_flag:
+        n_rows += 1
+    if args.pair:
         n_rows += 1
     # Aspect ratio handling: width:height per panel
     panel_width = 9.0
@@ -225,6 +290,13 @@ def main():
     axe.plot(tvals, discord_frac, label='Discordant Edge Density (0–1)', color='#df4d70', linewidth=args.linewidth)
     axe.plot(tvals, df['ne00'] + df['ne11'], label='Concordant Non-Edge Density (0 0, 1 1)', color='#ffbe83', linestyle='dashed', linewidth=args.linewidth)
     axe.plot(tvals, df['ne01'], label='Discordant Non-Edge Density (0 1)', color='#df4d70', linestyle='dashed', linewidth=args.linewidth)
+    # if args.projections:
+    #     # Projection: 2 * q * (1-p) * p where q=col1, p=total_edge_density
+    #     q = df['col1']
+    #     p = total_frac
+    #     proj_discord = (q**2 + (1 - q)**2 )
+    #     axe.plot(tvals, proj_discord, label='Discordant Edge Projection', color=darken_color('#df4d70'), linestyle='dotted', linewidth=args.linewidth)
+
     # axe.plot(tvals, df['col0']**2+df['col1']**2, label='Sum of Colour Squares', color='#888888', zorder=2, linewidth=0.5)
     axe.set_title('Edge Densities')
     axe.set_ylabel('Fraction of Edges')
@@ -232,9 +304,63 @@ def main():
     axe.grid(alpha=0.3)
     axe.legend(loc='upper right', fontsize='x-small')
 
-    # Optional panel 3: triangles
+    # Optional panel 3: two-path densities
+    if args.two_paths:
+        axp = axes[row_idx]
+        row_idx += 1
+        path_cols = ['2p000','2p001','2p010','2p011','2p101','2p111']
+        if all(c in df.columns for c in path_cols):
+            p_sum = df[path_cols].sum(axis=1)
+            axp.plot(tvals, p_sum, label='Total Two-Path Density', color='black', zorder=3, linewidth=args.linewidth)
+            # Use a distinct palette for 6 series
+            colors = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b']
+            labels = ['2-path 000','2-path 001','2-path 010','2-path 011','2-path 101','2-path 111']
+            for col, col_color, lab in zip(path_cols, colors, labels):
+                axp.plot(tvals, df[col], label=lab, color=col_color, linewidth=args.linewidth)
+            # Optional projections: composition fractions times total edge density
+            if args.projections:
+                f0 = df['col0']; f1 = df['col1']
+                p00 = df['e00']; p11 = df['e11']; p01 = df['e01']/2.0; p10 = p01
+
+                total_frac = (concord_frac + discord_frac)
+                # proj_vals = [
+                #     (f0**3) * total_frac**2,           # 000
+                #     2*(f0**2 * f1) * total_frac**2,      # 001
+                #     (f0**2 * f1) * total_frac**2,      # 010 same composition as 001
+                #     2*(f0 * f1**2) * total_frac**2,      # 011
+                #     (f0 * f1**2) * total_frac**2,      # 101 same composition as 011
+                #     (f1**3) * total_frac**2,           # 111
+                # ]
+                proj_vals = [
+                    p00*p00/f0,           # 000
+                    2*p00*p01/f0,         # 001
+                    p01*p10/f1,           # 010
+                    2*p01*p11/f1,         # 011
+                    p10*p01/f0,           # 101
+                    p11*p11/f1,           # 111
+                ]
+                proj_labels = ['2-path 000 (proj)','2-path 001 (proj)','2-path 010 (proj)','2-path 011 (proj)','2-path 101 (proj)','2-path 111 (proj)']
+                for proj, col_color, lab in zip(proj_vals, colors, proj_labels):
+                    axp.plot(tvals, proj, color=darken_color(col_color), linestyle='dotted', linewidth=args.linewidth, label=lab)
+            axp.set_title('2-Path Densities')
+            axp.set_ylabel('Fraction of 2-Paths')
+            try:
+                ymax_p = float(p_sum.max())
+            except Exception:
+                ymax_p = 0.0
+            if not np.isfinite(ymax_p) or ymax_p <= 0.0:
+                axp.set_ylim(0,1)
+            else:
+                axp.set_ylim(0, 1.1 * ymax_p)
+        else:
+            axp.text(0.5,0.5,'Two-path columns missing', ha='center', va='center')
+        axp.grid(alpha=0.3)
+        axp.legend(loc='upper right', fontsize='x-small', ncol=1)
+
+
+    # Optional panel 4: triangles
     if args.triangles:
-        # Panel 3: triangle counts + sum
+        # Panel 4: triangle counts + sum
         axt = axes[row_idx]
         row_idx += 1
         tri_cols = {'3cyc000','3cyc001','3cyc011','3cyc111'}
@@ -248,10 +374,11 @@ def main():
             # Optional projections: composition fractions times total edge density
             if args.projections:
                 f0 = df['col0']; f1 = df['col1']
-                proj_000 = (f0**3) * total_frac**3
-                proj_001 = 3*(f0**2 * f1) * total_frac**3
-                proj_011 = 3*(f0 * f1**2) * total_frac**3
-                proj_111 = (f1**3) * total_frac**3
+                p00 = df['e00']; p11 = df['e11']; p01 = df['e01']/2; p10 = p01
+                proj_000 = p00**3/f0**3
+                proj_001 = 3*p00*p01*p10/f0**2/f1   
+                proj_011 = 3*p01*p11*p10/f0/f1**2 
+                proj_111 = p11**3/f1**3 
                 axt.plot(tvals, proj_000, color=darken_color('#1b9e77'), linestyle='dotted', linewidth=args.linewidth, label='Triangle 000 (proj)')
                 axt.plot(tvals, proj_001, color=darken_color('#d95f02'), linestyle='dotted', linewidth=args.linewidth, label='Triangle 001 (proj)')
                 axt.plot(tvals, proj_011, color=darken_color('#7570b3'), linestyle='dotted', linewidth=args.linewidth, label='Triangle 011 (proj)')
@@ -271,49 +398,6 @@ def main():
             axt.text(0.5,0.5,'Triangle columns missing', ha='center', va='center')
         axt.grid(alpha=0.3)
         axt.legend(loc='upper right', fontsize='x-small', ncol=1)
-
-    # Optional panel 4: two-path densities
-    if args.two_paths:
-        axp = axes[row_idx]
-        row_idx += 1
-        path_cols = ['2p000','2p001','2p010','2p011','2p101','2p111']
-        if all(c in df.columns for c in path_cols):
-            p_sum = df[path_cols].sum(axis=1)
-            axp.plot(tvals, p_sum, label='Total Two-Path Density', color='black', zorder=3, linewidth=args.linewidth)
-            # Use a distinct palette for 6 series
-            colors = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b']
-            labels = ['2-path 000','2-path 001','2-path 010','2-path 011','2-path 101','2-path 111']
-            for col, col_color, lab in zip(path_cols, colors, labels):
-                axp.plot(tvals, df[col], label=lab, color=col_color, linewidth=args.linewidth)
-            # Optional projections: composition fractions times total edge density
-            if args.projections:
-                f0 = df['col0']; f1 = df['col1']
-                total_frac = (concord_frac + discord_frac)
-                proj_vals = [
-                    (f0**3) * total_frac**2,           # 000
-                    2*(f0**2 * f1) * total_frac**2,      # 001
-                    (f0**2 * f1) * total_frac**2,      # 010 same composition as 001
-                    2*(f0 * f1**2) * total_frac**2,      # 011
-                    (f0 * f1**2) * total_frac**2,      # 101 same composition as 011
-                    (f1**3) * total_frac**2,           # 111
-                ]
-                proj_labels = ['2-path 000 (proj)','2-path 001 (proj)','2-path 010 (proj)','2-path 011 (proj)','2-path 101 (proj)','2-path 111 (proj)']
-                for proj, col_color, lab in zip(proj_vals, colors, proj_labels):
-                    axp.plot(tvals, proj, color=darken_color(col_color), linestyle='dotted', linewidth=args.linewidth, label=lab)
-            axp.set_title('2-Path Densities')
-            axp.set_ylabel('Fraction of 2-Paths')
-            try:
-                ymax_p = float(p_sum.max())
-            except Exception:
-                ymax_p = 0.0
-            if not np.isfinite(ymax_p) or ymax_p <= 0.0:
-                axp.set_ylim(0,1)
-            else:
-                axp.set_ylim(0, 1.1 * ymax_p)
-        else:
-            axp.text(0.5,0.5,'Two-path columns missing', ha='center', va='center')
-        axp.grid(alpha=0.3)
-        axp.legend(loc='upper right', fontsize='x-small', ncol=1)
 
     # Optional 3-path panel
     if three_paths_flag:
@@ -341,19 +425,39 @@ def main():
             # Optional projections for 3-paths if requested
             if args.projections:
                 f0 = df['col0']; f1 = df['col1']
-                # For a 3-path (4 vertices, 3 edges) naive random projection: product of colour fractions for sequence * total_frac^3
-                # Interpret bit pattern as colours along path: v0-v1-v2-v3
+                p00 = df['e00']; p11 = df['e11']; p01 = df['e01']/2.0; p10 = p01
+                
+                def get_p(c1, c2):
+                    if c1 == '0' and c2 == '0': return p00
+                    if c1 == '1' and c2 == '1': return p11
+                    return p01
+
+                def get_f(c):
+                    return f0 if c == '0' else f1
+
                 for col in existing:
                     pattern = col.replace('3p','')
                     if len(pattern) != 4 or not all(c in '01' for c in pattern):
                         continue
-                    colour_prob = 1.0
-                    for ch in pattern:
-                        colour_prob = colour_prob * (f0 if ch == '0' else f1)
-                    # Symmetry factor: if pattern != reversed(pattern), multiply by 2 to account for both orientations in homomorphism density sum
+                    
+                    # Edges: (0,1), (1,2), (2,3)
+                    start_val = get_p(pattern[0], pattern[1]) * get_p(pattern[1], pattern[2]) * get_p(pattern[2], pattern[3])
+                    # Denominator: Excess appearance of internal nodes (index 1 and 2)
+                    denominator = get_f(pattern[1]) * get_f(pattern[2])
+                    
+                    # Symmetry factor
                     sym_factor = 2.0 if pattern != pattern[::-1] else 1.0
-                    proj_series = colour_prob * (total_frac**3) * sym_factor
-                    ax3p.plot(tvals, proj_series, linestyle='dotted', linewidth=args.linewidth, color=darken_color('#555555',0.7), label=f'{col} (proj)')
+                    
+                    proj_series = start_val / denominator * sym_factor
+                    
+                    # Find color
+                    try:
+                        idx = p3_cols.index(col)
+                        col_color = palette[idx] if idx < len(palette) else '#555555'
+                    except ValueError:
+                        col_color = '#555555'
+                        
+                    ax3p.plot(tvals, proj_series, linestyle='dotted', linewidth=args.linewidth, color=darken_color(col_color), label=f'{col} (proj)')
             ax3p.legend(loc='upper right', fontsize='x-small')
         else:
             ax3p.text(0.5,0.5,'3-path columns missing', ha='center', va='center')
@@ -371,14 +475,15 @@ def main():
             total1 = df[star1].sum(axis=1) if have1 else 0.0
             combined_total = total0 + total1
             axs3.plot(tvals, combined_total, label='Total 3-Star Density', color='black', linewidth=args.linewidth)
-            pal0 = ['#4d9221','#a1d76a','#e6f5d0','#fde0ef']
-            pal1 = ['#c51b7d','#de77ae','#f1b6da','#fde0ef']
+            # Use 8 distinct colours
+            pal0 = ['#1b9e77', '#d95f02', '#7570b3', '#e7298a']
+            pal1 = ['#66a61e', '#e6ab02', '#a6761d', '#666666']
             if have0:
                 for col, col_color in zip(star0, pal0):
                     axs3.plot(tvals, df[col], label=col, linewidth=args.linewidth, color=col_color)
             if have1:
                 for col, col_color in zip(star1, pal1):
-                    axs3.plot(tvals, df[col], label=col, linewidth=args.linewidth, color=col_color, linestyle='dashed')
+                    axs3.plot(tvals, df[col], label=col, linewidth=args.linewidth, color=col_color)
             axs3.set_title('3-Star Densities')
             axs3.set_ylabel('Fraction of 3-Stars')
             try:
@@ -400,16 +505,26 @@ def main():
             # Optional projections for 3-stars
             if args.projections:
                 f0 = df['col0']; f1 = df['col1']
+                p00 = df['e00']; p11 = df['e11']; p01 = df['e01']/2.0; p10 = p01
+
+                def get_p(c1, c2):
+                    if c1 == '0' and c2 == '0': return p00
+                    if c1 == '1' and c2 == '1': return p11
+                    return p01
+                
                 # A 3-star has 4 vertices (center + 3 leaves), 3 edges.
                 # Column names: 3s{center}_XYZ where XYZ are leaf colours.
-                def leaf_patterns(center_prefix, patterns, center_colour_series):
+                def leaf_patterns(center_prefix, patterns, center_colour_series, center_char):
+                    denom = center_colour_series**2 # Excess appearance of center (degree 3 -> excess 2)
+
                     for col in patterns:
                         patt = col.split('_',1)[1]
                         if len(patt) != 3:
                             continue
-                        leaf_prob = 1.0
-                        for ch in patt:
-                            leaf_prob *= (f0 if ch == '0' else f1)
+                        
+                        # Product of edges (center-leaf1, center-leaf2, center-leaf3)
+                        prod = get_p(center_char, patt[0]) * get_p(center_char, patt[1]) * get_p(center_char, patt[2])
+                        
                         # Multinomial symmetry factor: counts of leaves by colour
                         zeros = patt.count('0')
                         ones = 3 - zeros
@@ -418,20 +533,67 @@ def main():
                             mult = 1.0
                         else:
                             mult = 3.0
-                        proj = center_colour_series * leaf_prob * (total_frac**3) * mult
+                        
+                        proj = (prod / denom) * mult
                         yield col, proj
+
                 # Center 0
                 if have0:
-                    for col, proj in leaf_patterns('3s0', star0, f0):
-                        axs3.plot(tvals, proj, linestyle='dotted', linewidth=args.linewidth, color=darken_color('#4d9221',0.6), label=f'{col} (proj)')
+                    for col, proj in leaf_patterns('3s0', star0, f0, '0'):
+                        col_idx = star0.index(col)
+                        c_color = pal0[col_idx]
+                        axs3.plot(tvals, proj, linestyle='dotted', linewidth=args.linewidth, color=darken_color(c_color), label=f'{col} (proj)')
                 if have1:
-                    for col, proj in leaf_patterns('3s1', star1, f1):
-                        axs3.plot(tvals, proj, linestyle='dotted', linewidth=args.linewidth, color=darken_color('#c51b7d',0.6), label=f'{col} (proj)')
+                    for col, proj in leaf_patterns('3s1', star1, f1, '1'):
+                        col_idx = star1.index(col)
+                        c_color = pal1[col_idx]
+                        axs3.plot(tvals, proj, linestyle='dotted', linewidth=args.linewidth, color=darken_color(c_color), label=f'{col} (proj)')
             axs3.legend(loc='upper right', fontsize='x-small', ncol=2 if (have0 and have1) else 1)
         else:
             axs3.text(0.5,0.5,'3-star columns missing', ha='center', va='center')
 
-    axes[-1].set_xlabel('time')
+    # Optional pair comparison
+    if args.pair:
+        axpair = axes[row_idx]
+        row_idx += 1
+        p1, p2 = args.pair
+        patterns = [p1, p2]
+        # Use two distinct colors
+        pair_colors = ['#e41a1c', '#377eb8']
+        
+        valid_plots = 0
+        all_vals = []
+        
+        for pat, color in zip(patterns, pair_colors):
+            try:
+                col_name, divisor = get_canonical_and_divisor(pat)
+                if col_name in df.columns:
+                    y_vals = df[col_name] / divisor
+                    axpair.plot(tvals, y_vals, label=f"{pat} (from {col_name}/{int(divisor)})", color=color, linewidth=args.linewidth)
+                    all_vals.append(y_vals)
+                    valid_plots += 1
+                else:
+                    print(f"Warning: Column {col_name} for pattern {pat} not found in CSV.", file=sys.stderr)
+            except ValueError as e:
+                print(f"Warning: {e}", file=sys.stderr)
+                
+        if valid_plots == 0:
+            axpair.text(0.5, 0.5, 'No valid data for pairs', ha='center', va='center')
+        else:
+            axpair.set_title(f'Comparison: {p1} vs {p2}')
+            axpair.set_ylabel('Density')
+            axpair.legend(loc='upper right', fontsize='x-small')
+            axpair.grid(alpha=0.3)
+            # Scale Y axis
+            try:
+                max_val = max(s.max() for s in all_vals) if all_vals else 0.0
+                if max_val > 0:
+                    axpair.set_ylim(0, 1.1 * max_val)
+                else:
+                    axpair.set_ylim(0, 1)
+            except:
+                axpair.set_ylim(0, 1)
+
     fig.tight_layout()
     # Determine output path: explicit --out or derive from input CSV path
     if args.out:
